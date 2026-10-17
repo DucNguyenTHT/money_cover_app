@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import type { MonthPnl, RangePnl } from '@ketoan/api/contracts';
+import type { MonthStatus } from '@ketoan/api/domain';
 import { PageHeader } from '@/components/PageHeader';
 import { MonthPicker, thisMonth } from '@/components/MonthPicker';
-import { Card, Segmented } from '@/components/ui/controls';
+import { Card, EmptyState, Segmented } from '@/components/ui/controls';
 import { SERIES, SeriesChart } from '@/components/charts/Charts';
 import { ExportButton, Signed, StatCard, StatusBadges, STATUS_META, pctText } from '@/components/report';
 import { client, ok } from '@/lib/api-client';
@@ -334,7 +335,15 @@ export function PnlRangePage() {
           </>
         }
       />
-      {r && (
+      {r && !rangeHasData(r) && (
+        <Card>
+          <EmptyState
+            title={`Chưa có số liệu ${mode === 'Y' ? 'năm' : 'quý'} ${mode === 'Y' ? year : `${quarter}/${year}`}`}
+            hint="Kỳ này chưa có đơn bán, phiếu kho hay chi phí chung nào."
+          />
+        </Card>
+      )}
+      {r && rangeHasData(r) && (
         <>
           <Card className="mb-4 p-4">
             <h2 className="mb-3 font-semibold">
@@ -362,70 +371,152 @@ export function PnlRangePage() {
             />
           </Card>
           <Card>
-            <div
-              tabIndex={0}
-              role="region"
-              aria-label="Bảng, cuộn ngang để xem thêm cột"
-              className="overflow-x-auto"
-            >
-              <table className="w-full text-sm" style={{ minWidth: 260 + r.months.length * 120 }}>
-                <thead>
-                  <tr className="bg-primary-soft text-[13px] text-ink-strong">
-                    <th className="sticky left-0 bg-primary-soft px-3 py-2.5 text-left font-semibold">
-                      Chỉ tiêu
-                    </th>
-                    {r.months.map((m) => (
-                      <th key={m.month} className="px-3 py-2.5 text-right align-top font-semibold">
-                        T{Number(m.month.slice(5))}/{m.month.slice(0, 4)}
-                        <div className="mt-1 flex justify-end">
-                          <StatusBadges
-                            statuses={m.statuses.filter(
-                              (s) => s !== 'PROVISIONAL' || m.statuses.length === 1,
-                            )}
-                          />
-                        </div>
-                      </th>
-                    ))}
-                    <th className="px-3 py-2.5 text-right font-semibold">Tổng</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.rows.map((row) => (
-                    <tr
-                      key={row.key}
-                      className={cn(
-                        'border-b border-[#f2f4f7]',
-                        row.total && 'bg-total-row font-semibold',
-                        row.child && 'text-[13px] text-muted',
-                      )}
-                    >
-                      <td
-                        className={cn(
-                          'sticky left-0 bg-inherit px-3 py-2',
-                          row.child ? 'pl-8' : '',
-                          row.total ? 'bg-total-row' : 'bg-white',
-                        )}
-                      >
-                        {row.no && <span className="mr-2 text-faint">{row.no}</span>}
-                        {row.label}
-                      </td>
-                      {row.amounts.map((a, i) => (
-                        <td key={i} className="num px-3 py-2 text-right">
-                          {row.total ? <Signed v={a} lossTag={false} /> : lineAmount(a, row.deduct)}
-                        </td>
-                      ))}
-                      <td className="num px-3 py-2 text-right font-semibold">
-                        {row.total ? <Signed v={row.sum} /> : lineAmount(row.sum, row.deduct)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <RangeTable r={r} />
           </Card>
         </>
       )}
     </div>
+  );
+}
+
+/** A month with no figures at all (no sales, no stock movement, no overheads): shown as "—". */
+const monthEmpty = (r: RangePnl, i: number) => r.rows.every((row) => Number(row.amounts[i]) === 0);
+const rangeHasData = (r: RangePnl) => r.months.some((_, i) => !monthEmpty(r, i));
+
+const WARN_STATUSES = ['NO_STOCKTAKE', 'MISSING_OVERHEAD', 'PENDING_STOCK'] as const;
+
+/** One short line under the month: "Đã chốt", "⚠ 2 lưu ý" (details on hover / tap) or "Tạm tính". */
+function MonthState({ statuses, empty }: { statuses: MonthStatus[]; empty: boolean }) {
+  if (empty) return <span className="text-[11px] font-normal text-faint">Chưa có số liệu</span>;
+  if (statuses.includes('CLOSED'))
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-good">
+        <Lock size={11} aria-hidden /> Đã chốt
+      </span>
+    );
+  const warns = statuses.filter((x): x is (typeof WARN_STATUSES)[number] =>
+    (WARN_STATUSES as readonly string[]).includes(x),
+  );
+  if (warns.length)
+    return (
+      <span
+        title={warns.map((w) => `${STATUS_META[w].label}: ${STATUS_META[w].hint}`).join('\n')}
+        aria-label={`Tạm tính, ${warns.map((w) => STATUS_META[w].label).join(', ')}`}
+        className="inline-flex cursor-help items-center gap-1 text-[11px] font-semibold text-warn"
+      >
+        <AlertTriangle size={11} aria-hidden /> {warns.length} lưu ý
+      </span>
+    );
+  return <span className="text-[11px] font-normal text-primary-ink">Tạm tính</span>;
+}
+
+function RangeTable({ r }: { r: RangePnl }) {
+  const empty = r.months.map((_, i) => monthEmpty(r, i));
+  const usedWarns = WARN_STATUSES.filter((w) => r.months.some((m, i) => !empty[i] && m.statuses.includes(w)));
+  // Sticky cells need a solid background; the shadow marks the edge while scrolling.
+  const stickyLeft = 'sticky left-0 z-[1] shadow-[1px_0_0_var(--color-line)]';
+  // Phones only pin the label column: two pinned columns would leave no room for the months.
+  const stickyRight = 'sm:sticky sm:right-0 sm:z-[1] sm:shadow-[-1px_0_0_var(--color-line)]';
+  return (
+    <>
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label="Bảng, cuộn ngang để xem thêm cột"
+        className="overflow-x-auto"
+      >
+        <table className="w-full border-collapse text-sm" style={{ minWidth: 300 + r.months.length * 112 }}>
+          <thead>
+            <tr className="bg-primary-soft text-[13px] text-ink-strong">
+              <th
+                className={cn(stickyLeft, 'bg-primary-soft px-4 py-2.5 text-left align-bottom font-semibold')}
+              >
+                Chỉ tiêu
+              </th>
+              {r.months.map((m, i) => (
+                <th
+                  key={m.month}
+                  className="whitespace-nowrap px-3 py-2 text-right align-bottom font-semibold"
+                >
+                  <div className={cn(empty[i] && 'text-faint')}>
+                    T{Number(m.month.slice(5))}/{m.month.slice(0, 4)}
+                  </div>
+                  <MonthState statuses={m.statuses} empty={empty[i]!} />
+                </th>
+              ))}
+              <th
+                className={cn(
+                  stickyRight,
+                  'bg-primary-soft px-4 py-2.5 text-right align-bottom font-semibold',
+                )}
+              >
+                Tổng
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.rows.map((row) => {
+              const bg = row.total ? 'bg-total-row' : 'bg-white';
+              return (
+                <tr
+                  key={row.key}
+                  className={cn(
+                    'border-b border-[#f2f4f7]',
+                    row.total && 'font-semibold',
+                    row.child && 'text-[13px] text-muted',
+                  )}
+                >
+                  <td
+                    className={cn(
+                      stickyLeft,
+                      bg,
+                      'min-w-[150px] max-w-[170px] px-3 py-2 sm:min-w-[280px] sm:max-w-none sm:px-4 sm:whitespace-nowrap',
+                      row.child && 'pl-9',
+                    )}
+                  >
+                    {row.no && <span className="mr-2 inline-block w-5 text-faint">{row.no}</span>}
+                    {row.label}
+                  </td>
+                  {row.amounts.map((a, i) => (
+                    <td key={i} className={cn('num whitespace-nowrap px-3 py-2 text-right', bg)}>
+                      {empty[i] ? (
+                        <span className="text-faint">—</span>
+                      ) : row.total ? (
+                        <Signed v={a} lossTag={false} />
+                      ) : (
+                        lineAmount(a, row.deduct)
+                      )}
+                    </td>
+                  ))}
+                  <td
+                    className={cn(
+                      stickyRight,
+                      bg,
+                      'num whitespace-nowrap px-4 py-2 text-right font-semibold',
+                    )}
+                  >
+                    {row.total ? <Signed v={row.sum} /> : lineAmount(row.sum, row.deduct)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {usedWarns.length > 0 && (
+        <p className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line-soft px-4 py-2.5 text-xs text-muted">
+          <span className="inline-flex items-center gap-1 font-semibold text-warn">
+            <AlertTriangle size={12} aria-hidden /> Lưu ý:
+          </span>
+          {usedWarns.map((w) => (
+            <span key={w}>
+              <b className="font-semibold text-ink">{STATUS_META[w].label}</b> —{' '}
+              {STATUS_META[w].hint.toLowerCase()}
+            </span>
+          ))}
+        </p>
+      )}
+    </>
   );
 }
 
