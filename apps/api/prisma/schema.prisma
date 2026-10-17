@@ -1,0 +1,824 @@
+// Money columns: Decimal(16,2) in VND. Quantities: Decimal(16,4) in the ingredient's stock unit.
+// "*ById" columns that only record who did something are plain ints (no relation) to keep the model lean.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["typedSql"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- enums
+// Keep values identical to src/domain/enums.ts (checked by tests/enums-sync.test.ts).
+
+enum Role {
+  ADMIN
+  STAFF
+  KITCHEN
+}
+
+enum Station {
+  KITCHEN
+  BAR
+}
+
+enum IngredientKind {
+  INGREDIENT
+  PACKAGING
+}
+
+enum PriceType {
+  STORE
+  APP
+}
+
+enum RecipeScope {
+  ALL
+  TAKEAWAY_APP
+}
+
+enum PrinterRole {
+  BILL
+  KITCHEN
+  BAR
+}
+
+enum Channel {
+  DINE_IN
+  TAKEAWAY
+  APP
+}
+
+enum OrderStatus {
+  OPEN
+  PAID
+  CANCELLED
+}
+
+enum CancelKind {
+  CANCELLED
+  MERGED
+}
+
+enum DiscountType {
+  PERCENT
+  AMOUNT
+}
+
+enum VatMode {
+  EXCLUSIVE
+  INCLUSIVE
+}
+
+enum KitchenStatus {
+  NEW
+  SENT
+  DONE
+  SERVED
+}
+
+enum ItemStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  APP
+}
+
+enum ReceiptKind {
+  PURCHASE
+  OPENING
+}
+
+enum IssueReason {
+  SALE_USE
+  DISPOSAL
+  SUPPLIER_RETURN
+  INTERNAL_USE
+}
+
+enum StocktakeStatus {
+  DRAFT
+  DONE
+  CANCELLED
+}
+
+enum DocumentKind {
+  PURCHASE
+  SALE
+  OTHER
+}
+
+/// Business line for household tax (tỷ lệ % trên doanh thu). Rates live in src/domain/tax/household.ts.
+enum TaxGroup {
+  DISTRIBUTION
+  SERVICE
+  PRODUCTION
+  OTHER
+}
+
+// ---------------------------------------------------------------- catalog & config
+
+/// Cơ sở
+/// Quán / chi nhánh. Hiện chỉ dùng 1 cơ sở; giữ bảng để sau này mở thêm chi nhánh.
+/// Lưu: mã, tên, địa chỉ, điện thoại.
+model Branch {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  address   String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("branches")
+}
+
+/// Tài khoản
+/// Người dùng đăng nhập app, phân quyền ADMIN / STAFF / KITCHEN.
+/// Lưu: tên đăng nhập, mật khẩu và mã PIN duyệt (đã băm), họ tên, vai trò, trạm bếp / bar, số lần nhập sai PIN.
+model User {
+  id                 Int       @id @default(autoincrement())
+  username           String    @unique
+  passwordHash       String    @map("password_hash")
+  pinHash            String?   @map("pin_hash")
+  pinFailedCount     Int       @default(0) @map("pin_failed_count")
+  pinLockedUntil     DateTime? @map("pin_locked_until") @db.Timestamptz
+  fullName           String    @map("full_name")
+  role               Role
+  station            Station?
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("users")
+}
+
+/// Nguyên liệu
+/// Danh mục nguyên liệu và bao bì dùng trong định mức món, nhập / xuất / kiểm kê kho.
+/// Lưu: mã, tên, loại (nguyên liệu / bao bì), đơn vị kho, đơn vị định mức và hệ số quy đổi, đơn vị mua (thùng, bao…), nhóm.
+model Ingredient {
+  id             Int            @id @default(autoincrement())
+  code           String         @unique
+  name           String
+  kind           IngredientKind @default(INGREDIENT)
+  unit           String
+  recipeUnit     String         @map("recipe_unit")
+  recipeFactor   Decimal        @default(1) @map("recipe_factor") @db.Decimal(16, 4)
+  purchaseUnit   String?        @map("purchase_unit")
+  purchaseFactor Decimal        @default(1) @map("purchase_factor") @db.Decimal(16, 4)
+  category       String?
+  active         Boolean        @default(true)
+
+  recipeItems    DishRecipeItem[]
+  receiptItems   ReceiptItem[]
+  lots           Lot[]
+  issueItems     IssueItem[]
+  stocktakeItems StocktakeItem[]
+
+  @@map("ingredients")
+}
+
+/// Nhóm món
+/// Nhóm thực đơn: quyết định món hiện ở trạm bếp hay bar, và % nguyên liệu mục tiêu khi gợi ý giá.
+/// Lưu: tên, trạm, % food cost mục tiêu, thứ tự.
+model DishCategory {
+  id             Int      @id @default(autoincrement())
+  name           String
+  foodCostTarget Decimal? @map("food_cost_target") @db.Decimal(5, 2)
+  station        Station  @default(KITCHEN)
+  /// Ngành thuế của doanh thu nhóm này (hộ kinh doanh): ăn uống = PRODUCTION (3% GTGT).
+  taxGroup       TaxGroup @default(PRODUCTION) @map("tax_group")
+  sort           Int      @default(0)
+
+  dishes Dish[]
+
+  @@map("dish_categories")
+}
+
+/// Món
+/// Món bán trên thực đơn POS.
+/// Lưu: mã, tên, nhóm, ảnh, đang bán hay ngừng, ngày bị báo hết món, thứ tự.
+model Dish {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  name        String
+  categoryId  Int       @map("category_id")
+  imageUrl    String?   @map("image_url")
+  active      Boolean   @default(true)
+  /// Business date on which the dish was marked sold out; sold out only while it equals today's business date.
+  soldOutDate DateTime? @map("sold_out_date") @db.Date
+  sort        Int       @default(0)
+
+  category             DishCategory              @relation(fields: [categoryId], references: [id])
+  prices               DishPrice[]
+  recipes              DishRecipe[]
+  orderItems           OrderItem[]
+  stocktakeAllocations StocktakeDishAllocation[]
+
+  @@map("dishes")
+}
+
+/// Giá bán món
+/// Lịch sử giá bán theo ngày áp dụng; đơn hàng lấy giá có hiệu lực tại ngày bán.
+/// Lưu: loại giá (tại quán / app), giá, áp dụng từ ngày, người đổi.
+model DishPrice {
+  id            Int       @id @default(autoincrement())
+  dishId        Int       @map("dish_id")
+  priceType     PriceType @map("price_type")
+  price         Decimal   @db.Decimal(16, 2)
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  createdById   Int?      @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  dish Dish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+
+  @@unique([dishId, priceType, effectiveFrom])
+  @@map("dish_prices")
+}
+
+/// Định mức món
+/// Mỗi lần đổi công thức tạo một phiên bản theo ngày hiệu lực; đơn cũ giữ định mức cũ.
+/// Lưu: món, ngày hiệu lực, ghi chú.
+model DishRecipe {
+  id            Int      @id @default(autoincrement())
+  dishId        Int      @map("dish_id")
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  dish       Dish             @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  items      DishRecipeItem[]
+  orderItems OrderItem[]
+
+  @@unique([dishId, effectiveFrom])
+  @@map("dish_recipes")
+}
+
+/// Dòng định mức
+/// Lượng từng nguyên liệu / bao bì cho 1 phần món: căn cứ để trừ kho khi bán và tính giá vốn.
+/// Lưu: nguyên liệu, số lượng (đơn vị kho), áp dụng mọi kênh hay chỉ mang về / app.
+model DishRecipeItem {
+  id           Int         @id @default(autoincrement())
+  recipeId     Int         @map("recipe_id")
+  ingredientId Int         @map("ingredient_id")
+  qty          Decimal     @db.Decimal(16, 4)
+  scope        RecipeScope @default(ALL)
+
+  recipe     DishRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([recipeId, ingredientId, scope])
+  @@map("dish_recipe_items")
+}
+
+/// Khu vực
+/// Nhóm bàn trên sơ đồ bàn (tầng 1, sân…).
+/// Lưu: tên, thứ tự.
+model Area {
+  id     Int           @id @default(autoincrement())
+  name   String
+  sort   Int           @default(0)
+  tables DiningTable[]
+
+  @@map("areas")
+}
+
+/// Bàn
+/// Bàn trên sơ đồ bàn của POS.
+/// Lưu: khu vực, tên bàn, số chỗ, thứ tự, đang dùng.
+model DiningTable {
+  id     Int     @id @default(autoincrement())
+  areaId Int     @map("area_id")
+  name   String
+  seats  Int     @default(4)
+  sort   Int     @default(0)
+  active Boolean @default(true)
+
+  area   Area    @relation(fields: [areaId], references: [id])
+  orders Order[]
+
+  @@map("tables")
+}
+
+/// App giao hàng
+/// Các app giao đồ ăn và % chiết khấu, trừ vào lãi của đơn kênh App.
+/// Lưu: tên app, % hoa hồng.
+model DeliveryApp {
+  id            Int     @id @default(autoincrement())
+  name          String
+  commissionPct Decimal @map("commission_pct") @db.Decimal(5, 2)
+  active        Boolean @default(true)
+
+  orders Order[]
+
+  @@map("delivery_apps")
+}
+
+/// Máy in
+/// Máy in nhiệt trong LAN để in bill, phiếu bếp, phiếu bar.
+/// Lưu: tên, IP, cổng, khổ giấy, vai trò.
+model Printer {
+  id         Int         @id @default(autoincrement())
+  name       String
+  ip         String
+  port       Int         @default(9100)
+  paperWidth Int         @default(80) @map("paper_width")
+  role       PrinterRole
+  active     Boolean     @default(true)
+
+  @@map("printers")
+}
+
+/// Chi phí chung
+/// Chi phí cố định theo tháng: trừ vào lợi nhuận ròng và dùng tính % chi phí chung khi định giá.
+/// Lưu: năm, tháng, khoản mục, số tiền, ghi chú.
+model OverheadExpense {
+  id       Int     @id @default(autoincrement())
+  branchId Int     @map("branch_id")
+  year     Int
+  month    Int
+  category String
+  amount   Decimal @db.Decimal(16, 2)
+  note     String?
+
+  @@index([branchId, year, month])
+  @@map("overhead_expenses")
+}
+
+/// Cài đặt
+/// Cấu hình chung dạng khoá – giá trị.
+/// Lưu: giờ bắt đầu ngày kinh doanh, VAT, phụ thu, mức giảm tối đa, tài khoản VietQR, chế độ in…; kết nối Google Drive (mã hoá).
+model Setting {
+  key   String @id
+  value Json
+
+  @@map("settings")
+}
+
+// ---------------------------------------------------------------- sales
+
+/// Bộ đếm mã đơn
+/// Cấp số thứ tự đơn trong mỗi ngày kinh doanh (mã đơn dạng 261016-012).
+/// Lưu: ngày kinh doanh, số cuối đã cấp.
+model OrderCounter {
+  branchId     Int      @map("branch_id")
+  businessDate DateTime @map("business_date") @db.Date
+  lastNo       Int      @default(0) @map("last_no")
+
+  @@id([branchId, businessDate])
+  @@map("order_counters")
+}
+
+/// Đơn hàng
+/// Mỗi lần bán (tại bàn / mang về / app) — nguồn duy nhất của doanh thu.
+/// Lưu: mã đơn, ngày kinh doanh, kênh, bàn / app, trạng thái, tiền hàng, giảm giá, phụ thu, VAT, doanh thu thuần, tổng khách trả, chiết khấu app, giá vốn, người mở / thu / huỷ.
+model Order {
+  id                   Int           @id @default(autoincrement())
+  branchId             Int           @map("branch_id")
+  code                 String        @unique
+  businessDate         DateTime      @map("business_date") @db.Date
+  channel              Channel
+  tableId              Int?          @map("table_id")
+  deliveryAppId        Int?          @map("delivery_app_id")
+  appOrderCode         String?       @map("app_order_code")
+  guestCount           Int           @default(1) @map("guest_count")
+  status               OrderStatus   @default(OPEN)
+  splitFromOrderId     Int?          @map("split_from_order_id")
+  subtotal             Decimal       @default(0) @db.Decimal(16, 2)
+  itemDiscountTotal    Decimal       @default(0) @map("item_discount_total") @db.Decimal(16, 2)
+  orderDiscountType    DiscountType? @map("order_discount_type")
+  orderDiscountValue   Decimal?      @map("order_discount_value") @db.Decimal(16, 2)
+  orderDiscountAmount  Decimal       @default(0) @map("order_discount_amount") @db.Decimal(16, 2)
+  discountReason       String?       @map("discount_reason")
+  discountApprovedById Int?          @map("discount_approved_by")
+  serviceChargePct     Decimal       @default(0) @map("service_charge_pct") @db.Decimal(5, 2)
+  serviceChargeAmount  Decimal       @default(0) @map("service_charge_amount") @db.Decimal(16, 2)
+  /// Doanh thu thuần = subtotal − discounts + service charge (excludes VAT).
+  netRevenue           Decimal       @default(0) @map("net_revenue") @db.Decimal(16, 2)
+  vatPct               Decimal       @default(0) @map("vat_pct") @db.Decimal(5, 2)
+  vatMode              VatMode       @default(EXCLUSIVE) @map("vat_mode")
+  vatAmount            Decimal       @default(0) @map("vat_amount") @db.Decimal(16, 2)
+  /// What the customer pays.
+  total                Decimal       @default(0) @db.Decimal(16, 2)
+  appCommission        Decimal       @default(0) @map("app_commission") @db.Decimal(16, 2)
+  costTotal            Decimal       @default(0) @map("cost_total") @db.Decimal(16, 2)
+  note                 String?
+  /// Provisional bill printed: the table shows "chờ thanh toán".
+  billPrintedAt        DateTime?     @map("bill_printed_at") @db.Timestamptz
+  version              Int           @default(0)
+  openedById           Int           @map("opened_by")
+  openedAt             DateTime      @default(now()) @map("opened_at") @db.Timestamptz
+  paidById             Int?          @map("paid_by")
+  paidAt               DateTime?     @map("paid_at") @db.Timestamptz
+  cancelledById        Int?          @map("cancelled_by")
+  cancelledAt          DateTime?     @map("cancelled_at") @db.Timestamptz
+  cancelKind           CancelKind?   @map("cancel_kind")
+  cancelReason         String?       @map("cancel_reason")
+
+  table       DiningTable?   @relation(fields: [tableId], references: [id])
+  deliveryApp DeliveryApp?   @relation(fields: [deliveryAppId], references: [id])
+  items       OrderItem[]
+  payments    OrderPayment[]
+  issues      Issue[]
+
+  @@index([businessDate, status])
+  @@index([tableId, status])
+  @@map("orders")
+}
+
+/// Món trong đơn
+/// Từng món khách gọi, kèm trạng thái chế biến ở bếp.
+/// Lưu: món, phiên bản định mức, trạm, số lượng, đơn giá, giảm giá, thành tiền, giá vốn, trạng thái bếp, huỷ / bỏ đi.
+model OrderItem {
+  id             Int           @id @default(autoincrement())
+  orderId        Int           @map("order_id")
+  dishId         Int           @map("dish_id")
+  recipeId       Int?          @map("recipe_id")
+  station        Station
+  qty            Int
+  unitPrice      Decimal       @map("unit_price") @db.Decimal(16, 2)
+  discountAmount Decimal       @default(0) @map("discount_amount") @db.Decimal(16, 2)
+  discountReason String?       @map("discount_reason")
+  amount         Decimal       @db.Decimal(16, 2)
+  /// After item discount and the share of the order-level discount.
+  netAmount      Decimal       @default(0) @map("net_amount") @db.Decimal(16, 2)
+  costTotal      Decimal       @default(0) @map("cost_total") @db.Decimal(16, 2)
+  note           String?
+  kitchenStatus  KitchenStatus @default(NEW) @map("kitchen_status")
+  kitchenBatch   Int?          @map("kitchen_batch")
+  sentAt         DateTime?     @map("sent_at") @db.Timestamptz
+  doneAt         DateTime?     @map("done_at") @db.Timestamptz
+  servedAt       DateTime?     @map("served_at") @db.Timestamptz
+  status         ItemStatus    @default(ACTIVE)
+  cancelReason   String?       @map("cancel_reason")
+  cancelledById  Int?          @map("cancelled_by")
+  cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz
+  wasted         Boolean       @default(false)
+
+  order  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dish   Dish        @relation(fields: [dishId], references: [id])
+  recipe DishRecipe? @relation(fields: [recipeId], references: [id])
+
+  @@index([orderId])
+  @@index([station, kitchenStatus])
+  @@map("order_items")
+}
+
+/// Thanh toán
+/// Các lần trả tiền của một đơn (một đơn có thể trả nhiều phương thức).
+/// Lưu: phương thức, số tiền, tiền khách đưa, tiền thối.
+model OrderPayment {
+  id           Int           @id @default(autoincrement())
+  orderId      Int           @map("order_id")
+  method       PaymentMethod
+  amount       Decimal       @db.Decimal(16, 2)
+  cashReceived Decimal?      @map("cash_received") @db.Decimal(16, 2)
+  change       Decimal?      @db.Decimal(16, 2)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_payments")
+}
+
+/// Chốt ngày
+/// Đối chiếu tiền cuối mỗi ngày kinh doanh.
+/// Lưu: tiền mặt dự kiến, tiền đếm được, chênh lệch, tổng theo phương thức, người chốt.
+model DayClosing {
+  id               Int      @id @default(autoincrement())
+  branchId         Int      @map("branch_id")
+  businessDate     DateTime @map("business_date") @db.Date
+  expectedCash     Decimal  @map("expected_cash") @db.Decimal(16, 2)
+  countedCash      Decimal  @map("counted_cash") @db.Decimal(16, 2)
+  diff             Decimal  @db.Decimal(16, 2)
+  expectedByMethod Json     @map("expected_by_method")
+  note             String?
+  needsReclose     Boolean  @default(false) @map("needs_reclose")
+  closedById       Int      @map("closed_by")
+  closedAt         DateTime @default(now()) @map("closed_at") @db.Timestamptz
+
+  @@unique([branchId, businessDate])
+  @@map("day_closings")
+}
+
+// ---------------------------------------------------------------- inventory
+
+/// Phiếu nhập
+/// Nhập hàng từ nhà cung cấp, hoặc khai báo tồn đầu khi bắt đầu dùng app.
+/// Lưu: loại phiếu, ngày, nhà cung cấp, ghi chú, người tạo.
+model Receipt {
+  id          Int         @id @default(autoincrement())
+  branchId    Int         @map("branch_id")
+  kind        ReceiptKind @default(PURCHASE)
+  date        DateTime    @db.Date
+  supplier    String?
+  note        String?
+  createdById Int         @map("created_by")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  items     ReceiptItem[]
+  documents Document[]
+
+  @@index([branchId, date])
+  @@map("receipts")
+}
+
+/// Dòng phiếu nhập
+/// Từng nguyên liệu trong phiếu nhập; mỗi dòng sinh ra một lô hàng.
+/// Lưu: nguyên liệu, số lượng và đơn giá theo đơn vị kho, số lượng theo đơn vị mua, thành tiền.
+model ReceiptItem {
+  id              Int      @id @default(autoincrement())
+  receiptId       Int      @map("receipt_id")
+  ingredientId    Int      @map("ingredient_id")
+  /// Quantity in stock units.
+  qty             Decimal  @db.Decimal(16, 4)
+  /// Price per stock unit.
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(16, 4)
+  /// Quantity as typed in purchase units (thùng, bao…), for display.
+  purchaseUnitQty Decimal? @map("purchase_unit_qty") @db.Decimal(16, 4)
+  amount          Decimal  @db.Decimal(16, 2)
+
+  receipt    Receipt    @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  lot        Lot?
+
+  @@map("receipt_items")
+}
+
+/// Lô hàng
+/// Đơn vị tính giá vốn FIFO: mỗi lần nhập (hoặc phần thừa khi kiểm kê) là một lô giữ giá riêng.
+/// Lưu: nguyên liệu, ngày, đơn giá, số lượng nhập, số lượng còn lại.
+model Lot {
+  id              Int      @id @default(autoincrement())
+  branchId        Int      @map("branch_id")
+  ingredientId    Int      @map("ingredient_id")
+  date            DateTime @db.Date
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(16, 4)
+  qtyIn           Decimal  @map("qty_in") @db.Decimal(16, 4)
+  qtyRemaining    Decimal  @map("qty_remaining") @db.Decimal(16, 4)
+  receiptItemId   Int?     @unique @map("receipt_item_id")
+  stocktakeItemId Int?     @map("stocktake_item_id")
+
+  ingredient           Ingredient            @relation(fields: [ingredientId], references: [id])
+  receiptItem          ReceiptItem?          @relation(fields: [receiptItemId], references: [id])
+  stocktakeItem        StocktakeItem?        @relation(fields: [stocktakeItemId], references: [id])
+  issueAllocations     IssueAllocation[]
+  stocktakeAllocations StocktakeAllocation[]
+
+  @@index([branchId, ingredientId, date])
+  @@map("lots")
+}
+
+/// Phiếu xuất
+/// Mọi lần hàng ra khỏi kho: bán hàng (tự động), huỷ, trả nhà cung cấp, dùng nội bộ.
+/// Lưu: ngày, lý do, đơn / món liên quan, ghi chú, người tạo.
+model Issue {
+  id          Int         @id @default(autoincrement())
+  branchId    Int         @map("branch_id")
+  date        DateTime    @db.Date
+  reason      IssueReason
+  orderId     Int?        @map("order_id")
+  orderItemId Int?        @map("order_item_id")
+  note        String?
+  createdById Int         @map("created_by")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  order Order?      @relation(fields: [orderId], references: [id])
+  items IssueItem[]
+
+  @@index([branchId, date, reason])
+  @@map("issues")
+}
+
+/// Dòng phiếu xuất
+/// Lượng nguyên liệu xuất và giá vốn của nó.
+/// Lưu: nguyên liệu, số lượng, giá vốn, phần nợ kho chưa có lô và giá tạm.
+model IssueItem {
+  id               Int      @id @default(autoincrement())
+  issueId          Int      @map("issue_id")
+  ingredientId     Int      @map("ingredient_id")
+  qty              Decimal  @db.Decimal(16, 4)
+  costTotal        Decimal  @default(0) @map("cost_total") @db.Decimal(16, 2)
+  /// Quantity not covered by any lot yet ("nợ kho"); valued at pendingUnitPrice until settled.
+  pendingQty       Decimal  @default(0) @map("pending_qty") @db.Decimal(16, 4)
+  pendingUnitPrice Decimal? @map("pending_unit_price") @db.Decimal(16, 4)
+  /// Only for SUPPLIER_RETURN: the lot being returned.
+  lotId            Int?     @map("lot_id")
+
+  issue       Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  ingredient  Ingredient        @relation(fields: [ingredientId], references: [id])
+  allocations IssueAllocation[]
+
+  @@index([ingredientId, pendingQty])
+  @@map("issue_items")
+}
+
+/// Phân bổ lô khi xuất
+/// Dòng xuất đã lấy từ lô nào, bao nhiêu (FIFO) — để truy ngược giá vốn.
+/// Lưu: lô, số lượng, đơn giá.
+model IssueAllocation {
+  id          Int     @id @default(autoincrement())
+  issueItemId Int     @map("issue_item_id")
+  lotId       Int     @map("lot_id")
+  qty         Decimal @db.Decimal(16, 4)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(16, 4)
+
+  issueItem IssueItem @relation(fields: [issueItemId], references: [id], onDelete: Cascade)
+  lot       Lot       @relation(fields: [lotId], references: [id])
+
+  @@map("issue_allocations")
+}
+
+/// Phiếu kiểm kê
+/// Đếm tồn thực tế để tính hao hụt.
+/// Lưu: ngày, trạng thái (nháp / đã chốt / huỷ), người tạo, người chốt.
+model Stocktake {
+  id            Int             @id @default(autoincrement())
+  branchId      Int             @map("branch_id")
+  date          DateTime        @db.Date
+  status        StocktakeStatus @default(DRAFT)
+  note          String?
+  createdById   Int             @map("created_by")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  completedById Int?            @map("completed_by")
+  completedAt   DateTime?       @map("completed_at") @db.Timestamptz
+
+  items StocktakeItem[]
+
+  @@map("stocktakes")
+}
+
+/// Dòng kiểm kê
+/// So tồn sổ sách với tồn thực tế của từng nguyên liệu.
+/// Lưu: tồn sổ, tồn thực tế, chênh lệch, giá trị thiếu (+) / thừa (−).
+model StocktakeItem {
+  id               Int      @id @default(autoincrement())
+  stocktakeId      Int      @map("stocktake_id")
+  ingredientId     Int      @map("ingredient_id")
+  bookQty          Decimal  @map("book_qty") @db.Decimal(16, 4)
+  actualQty        Decimal? @map("actual_qty") @db.Decimal(16, 4)
+  diffQty          Decimal? @map("diff_qty") @db.Decimal(16, 4)
+  /// Price used for a surplus when the ingredient was never purchased.
+  surplusUnitPrice Decimal? @map("surplus_unit_price") @db.Decimal(16, 4)
+  /// Shortage value (positive) or surplus value (negative).
+  lossValue        Decimal  @default(0) @map("loss_value") @db.Decimal(16, 2)
+
+  stocktake       Stocktake                 @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  ingredient      Ingredient                @relation(fields: [ingredientId], references: [id])
+  allocations     StocktakeAllocation[]
+  dishAllocations StocktakeDishAllocation[]
+  surplusLots     Lot[]
+
+  @@unique([stocktakeId, ingredientId])
+  @@map("stocktake_items")
+}
+
+/// Phân bổ lô khi thiếu
+/// Phần thiếu khi kiểm kê được trừ khỏi lô nào (FIFO).
+/// Lưu: lô, số lượng, đơn giá.
+model StocktakeAllocation {
+  id              Int     @id @default(autoincrement())
+  stocktakeItemId Int     @map("stocktake_item_id")
+  lotId           Int     @map("lot_id")
+  qty             Decimal @db.Decimal(16, 4)
+  unitPrice       Decimal @map("unit_price") @db.Decimal(16, 4)
+
+  stocktakeItem StocktakeItem @relation(fields: [stocktakeItemId], references: [id], onDelete: Cascade)
+  lot           Lot           @relation(fields: [lotId], references: [id])
+
+  @@map("stocktake_allocations")
+}
+
+/// Phân bổ hao hụt vào món
+/// Chia giá trị hao hụt cho các món theo lượng đã dùng → ra lãi theo món sau kiểm kê.
+/// Lưu: món (trống = hao hụt chung), lượng dùng, giá trị.
+model StocktakeDishAllocation {
+  id              Int     @id @default(autoincrement())
+  stocktakeItemId Int     @map("stocktake_item_id")
+  /// null = "hao hụt chung" (no dish used the ingredient in the period).
+  dishId          Int?    @map("dish_id")
+  usageQty        Decimal @map("usage_qty") @db.Decimal(16, 4)
+  value           Decimal @db.Decimal(16, 2)
+
+  stocktakeItem StocktakeItem @relation(fields: [stocktakeItemId], references: [id], onDelete: Cascade)
+  dish          Dish?         @relation(fields: [dishId], references: [id])
+
+  @@map("stocktake_dish_allocations")
+}
+
+// ---------------------------------------------------------------- documents (scanned invoices)
+// Archive only: documents never change stock or P&L figures. Rows and files are soft-deleted,
+// the file itself stays on disk (UPLOAD_DIR) so nothing is ever lost.
+
+/// Chứng từ
+/// Hoá đơn / chứng từ mua bán được lưu trữ; không ảnh hưởng số liệu kho hay lãi lỗ.
+/// Lưu: loại (mua vào / bán ra / khác), ngày, số hoá đơn, đối tác, số tiền, ghi chú, phiếu nhập liên quan, xoá mềm.
+model Document {
+  id          Int          @id @default(autoincrement())
+  branchId    Int          @map("branch_id")
+  kind        DocumentKind
+  date        DateTime     @db.Date
+  number      String?
+  partner     String?
+  amount      Decimal?     @db.Decimal(16, 2)
+  note        String?
+  receiptId   Int?         @map("receipt_id")
+  createdById Int          @map("created_by")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+  deletedById Int?         @map("deleted_by")
+
+  receipt Receipt?       @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  files   DocumentFile[]
+
+  @@index([branchId, date])
+  @@index([receiptId])
+  @@map("documents")
+}
+
+/// File chứng từ
+/// Ảnh / PDF / XML của một chứng từ; file thật nằm trong thư mục storage/documents.
+/// Lưu: tên file, loại, dung lượng, đường dẫn file và ảnh thu nhỏ, mã sha256 chống trùng, người tải, xoá mềm.
+model DocumentFile {
+  id          Int       @id @default(autoincrement())
+  documentId  Int       @map("document_id")
+  name        String
+  mime        String
+  size        Int
+  /**
+   * Relative to UPLOAD_DIR, e.g. 2026/10/<uuid>.jpg
+   */
+  path        String
+  thumbPath   String?   @map("thumb_path")
+  sha256      String
+  createdById Int       @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+  @@index([sha256])
+  @@map("document_files")
+}
+
+// ---------------------------------------------------------------- system
+
+/// Lịch sử sửa
+/// Nhật ký mọi thao tác sửa / xoá / huỷ / khoá sổ, kèm lý do.
+/// Lưu: đối tượng, hành động, lý do, dữ liệu trước và sau, người làm, người duyệt.
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  entity       String
+  entityId     String   @map("entity_id")
+  action       String
+  reason       String?
+  before       Json?
+  after        Json?
+  userId       Int?     @map("user_id")
+  approvedById Int?     @map("approved_by")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// Khoá sổ tháng
+/// Tháng đã khoá thì không được ghi hay sửa chứng từ của tháng đó.
+/// Lưu: năm, tháng, người khoá, thời điểm.
+model PeriodLock {
+  id         Int      @id @default(autoincrement())
+  branchId   Int      @map("branch_id")
+  year       Int
+  month      Int
+  lockedById Int      @map("locked_by")
+  lockedAt   DateTime @default(now()) @map("locked_at") @db.Timestamptz
+
+  @@unique([branchId, year, month])
+  @@map("period_locks")
+}
+
+/// Số liệu chốt tháng
+/// Bản chụp lãi lỗ và lãi theo món lúc khoá sổ, để báo cáo tháng cũ không bị đổi.
+/// Lưu: năm, tháng, các dòng lãi lỗ, lãi theo món (JSON).
+model MonthlyClosing {
+  id         Int      @id @default(autoincrement())
+  branchId   Int      @map("branch_id")
+  year       Int
+  month      Int
+  figures    Json
+  dishProfit Json     @map("dish_profit")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([branchId, year, month])
+  @@map("monthly_closings")
+}

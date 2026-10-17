@@ -1,0 +1,6 @@
+* text=auto
+# Run inside Linux containers: must keep LF even on Windows checkouts.
+*.sh text eol=lf
+docker/Caddyfile text eol=lf
+# Run by Windows PowerShell 5.1: CRLF + BOM-free UTF-8 is fine; keep CRLF.
+*.ps1 text eol=crlf

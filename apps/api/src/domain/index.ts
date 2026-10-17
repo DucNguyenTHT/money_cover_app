@@ -1,0 +1,17 @@
+// Public entry for the web app (`@ketoan/api/domain`): pure functions only — no Prisma, no Node APIs.
+export * from './enums';
+export * from './money';
+export * from './business-date';
+export * from './auth/pin-policy';
+export * from './inventory/fifo';
+export * from './recipes/recipes';
+export * from './pricing/pricing';
+export * from './orders/totals';
+export * from './orders/payment';
+export * from './orders/cancel-policy';
+export * from './vietqr';
+export * from './stocktake/stocktake';
+export * from './period/pnl';
+export * from './documents/file-type';
+export * from './documents/permissions';
+export * from './tax/household';

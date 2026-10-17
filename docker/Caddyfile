@@ -1,0 +1,40 @@
+# HTTPS inside the shop LAN with Caddy's own certificate authority.
+# SITE_HOSTS: the names / IPs tablets use, e.g. "pos.local, 192.168.1.10" (set in .env.prod).
+{
+	# No public ACME: everything is signed by the local CA.
+	local_certs
+}
+
+{$SITE_HOSTS:pos.local} {
+	tls internal
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /socket.io/* {
+		reverse_proxy api:4000
+	}
+	handle {
+		root * /srv
+		# Hashed assets never change; index.html must always be fresh after an update.
+		@assets path /assets/*
+		@pages not path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		header @pages Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Plain-HTTP page to download the CA certificate once per tablet (before HTTPS is trusted):
+#   http://<server-ip>:8080/ca.crt
+:8080 {
+	handle /ca.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+	respond "Tải chứng chỉ: /ca.crt" 200
+}

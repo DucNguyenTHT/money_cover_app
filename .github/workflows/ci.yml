@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ketoan
+          POSTGRES_PASSWORD: ketoan
+          POSTGRES_DB: ketoan
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ketoan" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ketoan:ketoan@localhost:5432/ketoan
+      DATABASE_URL_TEST: postgresql://ketoan:ketoan@localhost:5432/ketoan_test
+      JWT_SECRET: ci-only-secret-0123456789abcdef0123456789
+      TZ: Asia/Ho_Chi_Minh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create test database
+        run: PGPASSWORD=ketoan psql -h localhost -U ketoan -c 'CREATE DATABASE ketoan_test'
+      # TypedSQL reads query types from a real database, so migrate before generating.
+      - run: pnpm --filter @ketoan/api exec prisma migrate deploy
+      - run: pnpm db:generate
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      - name: E2E — start the app on the CI database
+        run: |
+          pnpm db:seed
+          pnpm --filter @ketoan/api db:seed:demo
+          pnpm --filter @ketoan/api exec tsx scripts/dev-user.ts e2e_admin "$E2E_PASS" ADMIN 2580
+          (cd apps/api && NODE_ENV=production PORT=4000 node dist/main.js > ../../api.log 2>&1 &)
+          (cd apps/web && npx vite preview --port 5173 --strictPort > ../../web.log 2>&1 &)
+          npx wait-on -t 60000 http://localhost:4000/api/health http://localhost:5173
+        env:
+          E2E_PASS: ci-e2e-pass-2026
+      - run: pnpm --filter @ketoan/e2e exec playwright install --with-deps chromium
+      - run: pnpm e2e
+        env:
+          E2E_USER: e2e_admin
+          E2E_PASS: ci-e2e-pass-2026
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            e2e/test-results
+            api.log
+            web.log

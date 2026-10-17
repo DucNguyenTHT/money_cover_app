@@ -1,0 +1,14 @@
+{
+  "name": "@ketoan/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "shots": "node screenshots.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.1",
+    "@playwright/test": "^1.52.0",
+    "exceljs": "4.4.0"
+  }
+}

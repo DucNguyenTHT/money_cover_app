@@ -1,0 +1,68 @@
+# Production at the shop: one machine on the LAN runs everything.
+#   cp .env.prod.example .env.prod   (fill it in)
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# First admin password: docker compose -f docker-compose.prod.yml logs api | findstr "Mật khẩu"
+name: ketoan
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ketoan
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Đặt DB_PASSWORD trong .env.prod}
+      POSTGRES_DB: ketoan
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ketoan -d ketoan']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://ketoan:${DB_PASSWORD}@db:5432/ketoan
+      JWT_SECRET: ${JWT_SECRET:?Đặt JWT_SECRET (>= 32 ký tự) trong .env.prod}
+      CORS_ORIGIN: ${PUBLIC_URL:-https://pos.local}
+      TZ: Asia/Ho_Chi_Minh
+      UPLOAD_DIR: /data/documents
+      # Optional "Gửi lên Google Drive" (docs/setup-google-drive.md). Empty = feature shows setup hint.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      # Invoice photos live in a plain folder on the host (storage\documents) so the nightly
+      # backup script can copy them next to the database dump.
+      - ./storage/documents:/data/documents
+    # Thermal printers are reached on the LAN (port 9100) through the default bridge network.
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    restart: always
+    depends_on:
+      - api
+    environment:
+      SITE_HOSTS: ${SITE_HOSTS:-pos.local}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '8080:8080'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

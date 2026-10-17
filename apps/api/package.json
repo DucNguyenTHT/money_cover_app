@@ -1,0 +1,60 @@
+{
+  "name": "@ketoan/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./contracts": "./src/contracts/index.ts",
+    "./domain": "./src/domain/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "build": "tsup src/main.ts --format esm --target node20 --out-dir dist --clean",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "prisma generate --sql",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed/index.ts",
+    "db:seed:demo": "tsx prisma/seed/demo.ts",
+    "db:seed:demo-sales": "tsx prisma/seed/demo-sales.ts",
+    "db:reset": "prisma migrate reset --force",
+    "db:reset-admin": "tsx prisma/seed/reset-admin.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.0",
+    "@ts-rest/core": "^3.52.1",
+    "@ts-rest/express": "^3.52.1",
+    "@ts-rest/open-api": "^3.52.1",
+    "archiver": "^5.3.2",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "decimal.js": "^10.5.0",
+    "dotenv": "^16.5.0",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "socket.io": "^4.8.1",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/archiver": "^5.3.4",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.15.3",
+    "@types/swagger-ui-express": "^4.1.8",
+    "pino-pretty": "^13.0.0",
+    "prisma": "^6.16.0",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  }
+}

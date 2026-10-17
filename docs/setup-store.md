@@ -1,0 +1,107 @@
+# Cài đặt máy chủ tại quán
+
+Một máy (mini PC hoặc máy thu ngân chạy Windows 10/11) chạy toàn bộ hệ thống trong mạng LAN của quán.
+Mất internet vẫn bán và in được; chỉ cần máy chủ và router còn điện.
+
+## 1. Chuẩn bị máy chủ
+
+1. Cắm dây mạng vào router (ổn định hơn Wi-Fi). Nên có **UPS** để mất điện không làm hỏng dữ liệu.
+2. Trên router: đặt **IP cố định** cho máy chủ (DHCP reservation), ví dụ `192.168.1.10`.
+3. Cài **Docker Desktop** → Settings → General: bật _Start Docker Desktop when you sign in_.
+   Windows: bật tự đăng nhập tài khoản chạy Docker (hoặc dùng Docker Engine trên WSL chạy như dịch vụ).
+4. Cài **Git**, rồi lấy mã nguồn:
+   ```powershell
+   git clone <địa chỉ repo> C:\ketoan
+   cd C:\ketoan
+   ```
+
+## 2. Cấu hình
+
+```powershell
+copy .env.prod.example .env.prod
+notepad .env.prod
+```
+
+| Biến              | Ghi chú                                                                          |
+| ----------------- | -------------------------------------------------------------------------------- |
+| `DB_PASSWORD`     | Chuỗi ngẫu nhiên dài, ghi lại cất nơi an toàn                                    |
+| `JWT_SECRET`      | ≥ 32 ký tự ngẫu nhiên                                                            |
+| `SITE_HOSTS`      | Tên / IP mà máy tính bảng dùng, ví dụ `pos.local, 192.168.1.10`                  |
+| `PUBLIC_URL`      | Địa chỉ chính, ví dụ `https://pos.local`                                         |
+| `BACKUP_COPY_DIR` | Thư mục chép thêm bản sao lưu: ổ cứng ngoài hoặc thư mục Google Drive / OneDrive |
+
+Muốn dùng tên `pos.local`: thêm bản ghi DNS trên router (`pos.local → 192.168.1.10`); nếu router không hỗ trợ, dùng thẳng IP.
+
+## 3. Chạy
+
+```powershell
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs api | findstr "Mật khẩu"
+```
+
+Lần chạy đầu in ra **mật khẩu tạm của tài khoản `admin`**. Các container có `restart: always` nên bật lại máy là app tự chạy.
+
+Cập nhật phiên bản mới: `git pull` rồi chạy lại lệnh `up -d --build` (migration tự chạy khi API khởi động).
+
+## 4. Cài chứng chỉ trên từng máy tính bảng / điện thoại (1 lần)
+
+App chạy HTTPS bằng chứng chỉ do máy chủ tự cấp (cần cho PWA và để trình duyệt không cảnh báo).
+
+1. Trên máy tính bảng mở `http://192.168.1.10:8080/ca.crt` → tải file về.
+2. **Android**: Cài đặt → Bảo mật → Mã hoá & thông tin xác thực → Cài chứng chỉ → _Chứng chỉ CA_ → chọn `ca.crt`.
+   **iPad / iPhone**: mở file → Cài đặt → Đã tải hồ sơ → Cài đặt; rồi Cài đặt → Cài đặt chung → Giới thiệu → Cài đặt tin cậy chứng nhận → bật cho chứng chỉ vừa cài.
+   **Windows**: mở `ca.crt` → Install Certificate → Local Machine → _Trusted Root Certification Authorities_.
+3. Mở `https://pos.local` (hoặc `https://192.168.1.10`) → không còn cảnh báo → đăng nhập.
+4. Chrome: menu ⋮ → _Thêm vào màn hình chính_ để dùng như app.
+
+## 5. Lần đầu đăng nhập
+
+1. Đăng nhập `admin` + mật khẩu tạm → đổi mật khẩu → đặt **mã PIN duyệt** (4–6 số, dùng để duyệt giảm giá / huỷ đơn tại quầy).
+2. **Hệ thống → Cài đặt**: tên quán, địa chỉ, giờ bắt đầu ngày kinh doanh, VAT / phụ thu, tài khoản ngân hàng (VietQR), chế độ in.
+3. **Hệ thống → Tài khoản**: tạo tài khoản thu ngân (STAFF), bếp / bar (KITCHEN, chọn trạm).
+4. **Hệ thống → Bàn & khu vực**, **App giao hàng**, **Máy in & trạm** (xem `setup-printer.md`).
+5. **Hệ thống → Nhập dữ liệu Excel**: tải file mẫu, điền nguyên liệu → món → định mức → **tồn đầu**, nhập theo đúng thứ tự đó.
+
+## 6. Sao lưu
+
+```powershell
+# Cài lịch sao lưu 02:00 hằng đêm (chạy PowerShell "Run as administrator" một lần):
+powershell -ExecutionPolicy Bypass -File scripts\install-task.ps1
+# Sao lưu tay bất kỳ lúc nào:
+powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1
+```
+
+- Bản sao lưu nằm ở `backups\` (giữ 30 bản mới nhất) và được chép sang `BACKUP_COPY_DIR`.
+- Nhật ký: `backups\backup.log`. Mỗi tuần nên mở thư mục kiểm tra có file mới.
+- **Ảnh chứng từ** (menu Chứng từ) nằm ở `storage\documents\<năm>\<tháng>\`. Mỗi đêm script chép các file
+  mới sang `backups\documents\` và `BACKUP_COPY_DIR\documents\`. Bản chép không bao giờ bị xoá bớt, nên ảnh
+  lỡ xoá trên máy chủ vẫn còn trong bản sao lưu. Nên đặt `BACKUP_COPY_DIR` vào ổ cứng ngoài hoặc thư mục
+  Google Drive / OneDrive để ảnh còn nguyên nếu máy chủ hỏng.
+
+### Khôi phục (khi hỏng máy / nhầm dữ liệu)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\restore-db.ps1 -File backups\ketoan-20261012-0200.dump
+```
+
+Lệnh hỏi xác nhận (gõ `KHOIPHUC`), thay toàn bộ dữ liệu bằng bản sao lưu rồi khởi động lại API.
+Lệnh cũng chép lại các ảnh chứng từ còn thiếu từ `backups\documents\` vào `storage\documents\`. Trên máy
+mới, chép thư mục `documents` từ `BACKUP_COPY_DIR` vào `backups\` trước khi chạy lệnh.
+Máy mới: làm lại bước 1–3 với **cùng `.env.prod`**, sau đó chạy lệnh khôi phục.
+
+**Nên thử khôi phục 1 lần ngay sau khi cài** (sang máy khác hoặc DB trống) để chắc chắn bản sao lưu dùng được.
+
+## 7. Xem từ xa (tuỳ chọn)
+
+Cài **Tailscale** trên máy chủ và điện thoại chủ quán → mở `https://<tên máy tailscale>` để xem báo cáo khi không ở quán
+(thêm tên đó vào `SITE_HOSTS`). Không mở cổng router ra internet.
+
+## Xử lý sự cố
+
+| Hiện tượng                   | Kiểm tra                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| Máy tính bảng không vào được | Máy chủ còn bật? `docker compose -f docker-compose.prod.yml --env-file .env.prod ps`   |
+| Cảnh báo chứng chỉ           | Chưa cài `ca.crt` trên máy đó, hoặc truy cập bằng tên / IP không có trong `SITE_HOSTS` |
+| POS hiện "Mất kết nối"       | Wi-Fi của máy tính bảng; app tự kết nối lại                                            |
+| Không in được                | Xem `setup-printer.md`; POS vẫn bán được và in qua trình duyệt                         |
+| Xem lỗi API                  | `docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 100 api`   |
