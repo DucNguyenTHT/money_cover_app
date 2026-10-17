@@ -57,7 +57,8 @@ App chạy HTTPS bằng chứng chỉ do máy chủ tự cấp (cần cho PWA v�
 ## 5. Lần đầu đăng nhập
 
 1. Đăng nhập `admin` + mật khẩu tạm → đổi mật khẩu → đặt **mã PIN duyệt** (4–6 số, dùng để duyệt giảm giá / huỷ đơn tại quầy).
-2. **Hệ thống → Cài đặt**: tên quán, địa chỉ, giờ bắt đầu ngày kinh doanh, VAT / phụ thu, tài khoản ngân hàng (VietQR), chế độ in.
+2. **Hệ thống → Cài đặt**: tên quán, địa chỉ, giờ bắt đầu ngày kinh doanh, **loại hình nộp thuế** (hộ kinh doanh / công ty; hộ kinh doanh: cách tính thuế TNCN, đã đăng ký hoá đơn điện tử chưa), phụ thu, tài khoản ngân hàng (VietQR), chế độ in.
+   Nhóm món nào không phải đồ ăn uống (vd bán hàng hoá đóng gói) thì đổi **ngành thuế** ở _Thực đơn → Nhóm món_.
 3. **Hệ thống → Tài khoản**: tạo tài khoản thu ngân (STAFF), bếp / bar (KITCHEN, chọn trạm).
 4. **Hệ thống → Bàn & khu vực**, **App giao hàng**, **Máy in & trạm** (xem `setup-printer.md`).
 5. **Hệ thống → Nhập dữ liệu Excel**: tải file mẫu, điền nguyên liệu → món → định mức → **tồn đầu**, nhập theo đúng thứ tự đó.
@@ -105,3 +106,5 @@ Cài **Tailscale** trên máy chủ và điện thoại chủ quán → mở `ht
 | POS hiện "Mất kết nối"       | Wi-Fi của máy tính bảng; app tự kết nối lại                                            |
 | Không in được                | Xem `setup-printer.md`; POS vẫn bán được và in qua trình duyệt                         |
 | Xem lỗi API                  | `docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 100 api`   |
+| Quên mật khẩu `admin`        | `powershell -ExecutionPolicy Bypass -File scripts\reset-admin.ps1` in mật khẩu tạm mới |
+| Mất mật khẩu tạm lần đầu     | Như trên (log chỉ in mật khẩu tạm một lần khi cài)                                     |

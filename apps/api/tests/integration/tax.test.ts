@@ -93,6 +93,15 @@ describe('household tax (hộ kinh doanh)', () => {
     expect(line('taxVat')?.amount).toBe('28800000');
     expect(line('taxPit')?.amount).toBe('180000000');
     expect(line('profitAfterTax')?.amount).toBe('391200000');
+
+    // Quarter / year chart and the period list use the same after-tax figure.
+    const range = await client.reports.pnlRange({ query: { from: '2026-01', to: '2026-02' } });
+    expect((range.body as { profitAfterTax: string[] }).profitAfterTax).toEqual(['600000000', '391200000']);
+    const periods = await client.reports.periods({ query: { year: 2026 } });
+    const feb = (periods.body as { month: string; profitAfterTax: string | null }[]).find(
+      (p) => p.month === '2026-02',
+    );
+    expect(feb?.profitAfterTax).toBe('391200000');
   });
 
   it('a closed month keeps the tax it was closed with', async () => {

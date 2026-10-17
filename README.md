@@ -1,15 +1,19 @@
 # Quán ăn — Bán hàng (POS) & Kế toán nội bộ
 
 Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR), kho FIFO theo lô (nhập, xuất, nợ kho, kiểm kê),
-giá thành & giá bán từng món, lãi lỗ tháng / quý / năm, khoá sổ.
+giá thành & giá bán từng món (kèm lịch sử giá bán), lãi lỗ tháng / quý / năm, khoá sổ, lưu trữ chứng từ
+(ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên Google Drive) và thuế hộ kinh doanh (GTGT + TNCN tạm tính,
+báo cáo "Thuế phải nộp").
 
 | App        | Nội dung                                                                                                                                                  |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/api` | Express + Socket.IO + Prisma (PostgreSQL). `src/domain` nghiệp vụ thuần, `src/contracts` hợp đồng API (ts-rest), `prisma/sql` truy vấn báo cáo (TypedSQL) |
 | `apps/web` | React + Vite + Tailwind v4: `/pos` bán hàng, `/kitchen` bếp / bar, `/admin` quản trị & báo cáo                                                            |
-| `e2e`      | Playwright: luồng bán hàng, luồng kiểm kê                                                                                                                 |
+| `e2e`      | Playwright: bán hàng, kiểm kê, chứng từ, trợ năng (a11y), cài mới từ đầu                                                                                  |
 
-Tài liệu: [kiến trúc](docs/architecture.md) · [quy tắc nghiệp vụ](docs/business-rules.md) · [cài máy chủ tại quán](docs/setup-store.md) · [máy in](docs/setup-printer.md)
+Sơ đồ hệ thống, database và API (luôn khớp phiên bản đang chạy): `/api/docs/architecture` — dev: http://localhost:4000/api/docs/architecture.
+
+Tài liệu: [kiến trúc](docs/architecture.md) · [quy tắc nghiệp vụ](docs/business-rules.md) · [cài máy chủ tại quán](docs/setup-store.md) · [máy in](docs/setup-printer.md) · [Google Drive](docs/setup-google-drive.md) · [thuế GTGT & hộ kinh doanh](docs/thue-gtgt-viet-nam.md) · [áp dụng thuế trong app](docs/ap-dung-thue-trong-app.md)
 
 ## Chạy trên máy dev
 
@@ -37,6 +41,7 @@ Mở http://localhost:5173, đăng nhập `admin` bằng mật khẩu tạm in r
 | `pnpm e2e`                                                                | Playwright — cần app đang chạy và `E2E_USER` / `E2E_PASS` của một ADMIN |
 | `pnpm lint` / `pnpm typecheck` / `pnpm build`                             | kiểm tra & build                                                        |
 | `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:reset` | quản lý DB                                                              |
+| `pnpm --filter @ketoan/api db:reset-admin`                                | quên mật khẩu `admin`: in mật khẩu tạm mới (phải đổi khi đăng nhập)     |
 
 Commit chạy `lint-staged` (eslint + prettier) qua husky. CI (`.github/workflows/ci.yml`) chạy lint, typecheck, test, build và e2e.
 

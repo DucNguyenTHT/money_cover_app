@@ -9,7 +9,7 @@ export function SetupChecklist({ setup }: { setup: Dashboard['setup'] }) {
   const steps = [
     {
       done: setup.shopNamed,
-      label: 'Đặt tên quán, địa chỉ, VAT / phụ thu, tài khoản ngân hàng (VietQR)',
+      label: 'Đặt tên quán, địa chỉ, loại hình nộp thuế, phụ thu, tài khoản ngân hàng (VietQR)',
       to: '/admin/system/settings',
     },
     { done: setup.pinSet, label: 'Đặt mã PIN duyệt của ADMIN', to: '/admin/me' },

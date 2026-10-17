@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Download, FileUp, Upload } from 'lucide-react';
 import type { ImportKind, ImportPreview } from '@ketoan/api/contracts';
 import { PageHeader } from '@/components/PageHeader';
-import { today } from '@/components/MonthPicker';
+
 import { Button } from '@/components/ui/Button';
 import { Badge, Card, Segmented } from '@/components/ui/controls';
 import { DataTable } from '@/components/ui/DataTable';
@@ -11,6 +11,7 @@ import { Field, Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok, tokenStore } from '@/lib/api-client';
+import { useBusinessToday } from '@/lib/business-date';
 
 const KINDS: { value: ImportKind; label: string; hint: string; dated?: string }[] = [
   { value: 'ingredients', label: 'Nguyên liệu', hint: 'Mã trùng với nguyên liệu đã có sẽ được cập nhật.' },
@@ -46,7 +47,8 @@ export function ImportPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [kind, setKind] = useState<ImportKind>('ingredients');
-  const [date, setDate] = useState(today());
+  const bizToday = useBusinessToday();
+  const [date, setDate] = useState(bizToday);
   const [file, setFile] = useState<{ name: string; b64: string } | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const meta = KINDS.find((k) => k.value === kind)!;

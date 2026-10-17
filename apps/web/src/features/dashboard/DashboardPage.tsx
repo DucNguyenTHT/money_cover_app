@@ -49,9 +49,9 @@ export function DashboardPage() {
           sub={`${d.openOrders} đơn đang mở`}
         />
         <StatCard
-          label={`Lợi nhuận ròng tháng ${d.month.slice(5)}/${d.month.slice(0, 4)}`}
-          value={<Signed v={d.monthNetProfit} />}
-          tone={Number(d.monthNetProfit) < 0 ? 'bad' : undefined}
+          label={`${d.monthProfitAfterTax !== null ? 'Lợi nhuận sau thuế' : 'Lợi nhuận ròng'} tháng ${d.month.slice(5)}/${d.month.slice(0, 4)}`}
+          value={<Signed v={d.monthProfitAfterTax ?? d.monthNetProfit} />}
+          tone={Number(d.monthProfitAfterTax ?? d.monthNetProfit) < 0 ? 'bad' : undefined}
           sub={<StatusBadges statuses={d.monthStatuses} />}
         />
       </div>
@@ -135,10 +135,29 @@ export function DashboardPage() {
               <span className="text-muted">Lãi gộp</span>
               <Signed v={d.monthGrossProfit} />
             </div>
-            <div className="flex justify-between py-1 font-semibold">
-              <span>Lợi nhuận ròng</span>
-              <Signed v={d.monthNetProfit} />
-            </div>
+            {d.monthProfitAfterTax !== null ? (
+              <>
+                <div className="flex justify-between py-1">
+                  <span className="text-muted">Lợi nhuận trước thuế</span>
+                  <Signed v={d.monthNetProfit} />
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-muted">Thuế (tạm tính)</span>
+                  <span className="num">
+                    {money(Number(d.monthNetProfit) - Number(d.monthProfitAfterTax))}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 font-semibold">
+                  <span>Lợi nhuận sau thuế</span>
+                  <Signed v={d.monthProfitAfterTax} />
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between py-1 font-semibold">
+                <span>Lợi nhuận ròng</span>
+                <Signed v={d.monthNetProfit} />
+              </div>
+            )}
             <Link to="/admin/reports/pnl" className="mt-2 inline-block text-primary-ink">
               Xem báo cáo lãi lỗ <ArrowRight size={14} className="inline" />
             </Link>

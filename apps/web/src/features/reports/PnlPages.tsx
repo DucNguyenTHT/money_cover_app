@@ -337,9 +337,11 @@ export function PnlRangePage() {
       {r && (
         <>
           <Card className="mb-4 p-4">
-            <h2 className="mb-3 font-semibold">Doanh thu thuần và lợi nhuận ròng theo tháng</h2>
+            <h2 className="mb-3 font-semibold">
+              Doanh thu thuần và {r.profitAfterTax ? 'lợi nhuận sau thuế' : 'lợi nhuận ròng'} theo tháng
+            </h2>
             <SeriesChart
-              ariaLabel={`Doanh thu thuần và lợi nhuận ròng ${title}`}
+              ariaLabel={`Doanh thu thuần và ${r.profitAfterTax ? 'lợi nhuận sau thuế' : 'lợi nhuận ròng'} ${title}`}
               labels={r.months.map((m) => `T${Number(m.month.slice(5))}`)}
               series={[
                 {
@@ -349,10 +351,10 @@ export function PnlRangePage() {
                   values: r.netRevenue.map(Number),
                 },
                 {
-                  name: 'Lợi nhuận ròng',
+                  name: r.profitAfterTax ? 'Lợi nhuận sau thuế' : 'Lợi nhuận ròng',
                   color: SERIES.orange,
                   kind: 'line',
-                  values: r.netProfit.map(Number),
+                  values: (r.profitAfterTax ?? r.netProfit).map(Number),
                 },
               ]}
               format={(v) => money(v)}

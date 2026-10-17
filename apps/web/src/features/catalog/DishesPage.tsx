@@ -11,7 +11,7 @@ import {
   type TaxGroup,
 } from '@ketoan/api/domain';
 import { PageHeader } from '@/components/PageHeader';
-import { today } from '@/components/MonthPicker';
+
 import { IngredientPicker, useIngredients } from '@/components/IngredientPicker';
 import { ReasonDialog } from '@/components/ReasonDialog';
 import { Button, IconButton } from '@/components/ui/Button';
@@ -25,6 +25,7 @@ import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { dateVi, money, parseMoney, parseQty } from '@/lib/format';
+import { useBusinessToday } from '@/lib/business-date';
 
 type Row = DishDto & { cost?: PricingRow };
 
@@ -410,7 +411,8 @@ function PricesTab({ dish }: { dish: DishDetail }) {
   const invalidate = useInvalidateMenu();
   const [type, setType] = useState<PriceType>('STORE');
   const [price, setPrice] = useState('');
-  const [from, setFrom] = useState(today());
+  const bizToday = useBusinessToday();
+  const [from, setFrom] = useState(bizToday);
   const save = useMutation({
     mutationFn: async () =>
       ok(
@@ -519,11 +521,12 @@ function RecipeTab({ dish }: { dish: DishDetail }) {
   const toast = useToast();
   const invalidate = useInvalidateMenu();
   const { data: ingredients } = useIngredients();
-  const current = dish.recipes.find((r) => r.effectiveFrom <= today()) ?? dish.recipes[0];
+  const bizToday = useBusinessToday();
+  const current = dish.recipes.find((r) => r.effectiveFrom <= bizToday) ?? dish.recipes[0];
   const [versionId, setVersionId] = useState<number | 'new'>(current?.id ?? 'new');
   const version = dish.recipes.find((r) => r.id === versionId);
   const startFrom = (r = version) => ({
-    from: r && !r.used ? r.effectiveFrom : today(),
+    from: r && !r.used ? r.effectiveFrom : bizToday,
     note: r?.note ?? '',
     lines: (r?.items ?? []).map((i) => ({
       key: ++rk,
@@ -548,7 +551,7 @@ function RecipeTab({ dish }: { dish: DishDetail }) {
     setVersionId(v);
     const r = v === 'new' ? version : dish.recipes.find((x) => x.id === v);
     const s = startFrom(r);
-    setForm(v === 'new' ? { ...s, from: today(), note: '' } : s);
+    setForm(v === 'new' ? { ...s, from: bizToday, note: '' } : s);
   };
 
   const save = useMutation({

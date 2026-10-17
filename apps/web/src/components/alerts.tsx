@@ -16,6 +16,7 @@ import {
 import type { Dashboard } from '@ketoan/api/contracts';
 import { client, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
+import { money } from '@/lib/format';
 
 export interface AlertItem {
   icon: LucideIcon;
@@ -50,8 +51,18 @@ function taxItems(d: Dashboard): AlertItem[] {
 }
 
 export function alertItems(d: Dashboard): AlertItem[] {
+  const monthProfit = Number(d.monthProfitAfterTax ?? d.monthNetProfit);
   return [
     ...taxItems(d),
+    ...(monthProfit < 0
+      ? [
+          {
+            icon: TrendingDown,
+            text: `Tháng ${Number(d.month.slice(5))} đang lỗ ${money(-monthProfit)} (tạm tính)`,
+            to: '/admin/reports/pnl',
+          },
+        ]
+      : []),
     {
       icon: TrendingDown,
       n: d.alerts.lossDishes,

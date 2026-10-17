@@ -82,8 +82,10 @@ export function PeriodsPage() {
                 {money(m.netRevenue)}
               </span>
               <span className="num hidden text-right text-[13px] md:block">
-                <span className="block text-xs text-muted">LN ròng</span>
-                <Signed v={m.netProfit} />
+                <span className="block text-xs text-muted">
+                  {m.profitAfterTax !== null ? 'LN sau thuế' : 'LN ròng'}
+                </span>
+                <Signed v={m.profitAfterTax ?? m.netProfit} />
               </span>
               <span className="text-right">
                 {m.locked
@@ -142,9 +144,16 @@ export function PeriodsPage() {
       >
         {locking && (
           <div className="flex flex-col gap-2 text-[13px]">
-            <p>
-              Lợi nhuận ròng sẽ được chốt: <Signed v={locking.netProfit} strong />
-            </p>
+            {locking.profitAfterTax !== null ? (
+              <p>
+                Lợi nhuận sau thuế sẽ được chốt: <Signed v={locking.profitAfterTax} strong /> (trước thuế{' '}
+                <Signed v={locking.netProfit} />; số thuế tạm tính của tháng cũng được chốt)
+              </p>
+            ) : (
+              <p>
+                Lợi nhuận ròng sẽ được chốt: <Signed v={locking.netProfit} strong />
+              </p>
+            )}
             {locking.statuses.includes('NO_STOCKTAKE') && (
               <p className="text-warn">Tháng chưa kiểm kê — lợi nhuận chưa trừ hao hụt.</p>
             )}

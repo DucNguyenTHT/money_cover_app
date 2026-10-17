@@ -394,6 +394,9 @@ export async function pnlRange(from: string, to: string): Promise<RangePnl> {
     rows,
     netRevenue: data.map((d) => pnlTotals(d.figures).netRevenue.toString()),
     netProfit: data.map((d) => pnlTotals(d.figures).netProfit.toString()),
+    profitAfterTax: data.some((d) => d.figures.tax)
+      ? data.map((d) => pnlTotals(d.figures).profitAfterTax.toString())
+      : null,
   };
 }
 
@@ -759,6 +762,7 @@ export async function dashboard(): Promise<Dashboard> {
     monthNetRevenue: totals.netRevenue.toString(),
     monthGrossProfit: totals.grossProfit.toString(),
     monthNetProfit: totals.netProfit.toString(),
+    monthProfitAfterTax: monthData.figures.tax ? totals.profitAfterTax.toString() : null,
     last30,
     byHourToday: hours.map((h) => ({ hour: n(h.hour), netRevenue: m(h.net_revenue) })),
     topDishes: [...dishes]
@@ -797,8 +801,16 @@ export async function dashboard(): Promise<Dashboard> {
 
 // ---------------------------------------------------------------- periods
 
-async function periodDto(branchId: number, month: string): Promise<PeriodDto> {
-  const [data, lock] = await Promise.all([monthFigures(branchId, month), lockOf(branchId, month)]);
+/** `withTax` (optional) = months already computed with tax, so a whole year is computed once. */
+async function periodDto(
+  branchId: number,
+  month: string,
+  withTax?: Map<string, MonthData>,
+): Promise<PeriodDto> {
+  const [data, lock] = await Promise.all([
+    withTax?.get(month) ?? monthsWithTax(branchId, [month]).then((mp) => mp.get(month)!),
+    lockOf(branchId, month),
+  ]);
   const t = pnlTotals(data.figures);
   let problems: string[] = [];
   if (!data.locked) {
@@ -824,6 +836,7 @@ async function periodDto(branchId: number, month: string): Promise<PeriodDto> {
     lockedByName: who?.fullName ?? null,
     netRevenue: t.netRevenue.toString(),
     netProfit: t.netProfit.toString(),
+    profitAfterTax: data.figures.tax ? t.profitAfterTax.toString() : null,
     problems,
     hasActivity: data.locked || data.activity > 0,
   };
@@ -831,7 +844,9 @@ async function periodDto(branchId: number, month: string): Promise<PeriodDto> {
 
 export async function periods(year: number) {
   const branchId = await defaultBranchId();
-  return Promise.all(monthsBetween(`${year}-01`, `${year}-12`).map((mm) => periodDto(branchId, mm)));
+  const months = monthsBetween(`${year}-01`, `${year}-12`);
+  const withTax = await yearWithTax(branchId, months[11]!);
+  return Promise.all(months.map((mm) => periodDto(branchId, mm, withTax)));
 }
 
 export async function lock(user: AuthUser, month: string) {

@@ -5,7 +5,7 @@ import { AlertTriangle, Lock, Paperclip, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import type { ReceiptDetail, ReceiptInput, ReceiptSummary } from '@ketoan/api/contracts';
 import { PageHeader } from '@/components/PageHeader';
-import { MonthPicker, thisMonth, today } from '@/components/MonthPicker';
+import { MonthPicker, thisMonth } from '@/components/MonthPicker';
 import { IngredientPicker, useIngredients } from '@/components/IngredientPicker';
 import { ReasonDialog } from '@/components/ReasonDialog';
 import { Button, IconButton } from '@/components/ui/Button';
@@ -24,6 +24,7 @@ import {
   ReceiptDocuments,
   uploadSummary,
 } from '@/features/documents/DocumentFiles';
+import { useBusinessToday } from '@/lib/business-date';
 
 /**
  * New purchase prices can push dishes over their food-cost target: remind the ADMIN right here.
@@ -185,6 +186,7 @@ function ReceiptEditor({
     queryFn: async () => ok(await client.inventory.getReceipt({ params: { id: id! } })),
   });
 
+  const bizToday = useBusinessToday();
   const [form, setForm] = useState<{
     kind: ReceiptInput['kind'];
     date: string;
@@ -195,7 +197,7 @@ function ReceiptEditor({
     id === null
       ? {
           kind: 'PURCHASE',
-          date: defaultMonth === thisMonth() ? today() : `${defaultMonth}-01`,
+          date: defaultMonth === thisMonth() ? bizToday : `${defaultMonth}-01`,
           supplier: '',
           note: '',
           lines: [emptyLine()],

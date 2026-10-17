@@ -71,6 +71,8 @@ export const rangePnlSchema = z.object({
   rows: z.array(lineBase.extend({ amounts: z.array(money), total: z.boolean(), sum: money })),
   netRevenue: z.array(money),
   netProfit: z.array(money),
+  /** Household: profit after the estimated tax, per month (null for a company). */
+  profitAfterTax: z.array(money).nullable(),
 });
 export type RangePnl = z.infer<typeof rangePnlSchema>;
 
@@ -239,6 +241,8 @@ export const dashboardSchema = z.object({
   monthNetRevenue: money,
   monthGrossProfit: money,
   monthNetProfit: money,
+  /** Household: month profit after the estimated tax (null for a company). */
+  monthProfitAfterTax: money.nullable(),
   last30: z.array(z.object({ day: isoDate, netRevenue: money, grossProfit: money })),
   byHourToday: z.array(z.object({ hour: z.number(), netRevenue: money })),
   topDishes: z.array(z.object({ name: z.string(), qty: z.number(), netRevenue: money })),
@@ -327,6 +331,8 @@ export const periodSchema = z.object({
   lockedByName: z.string().nullable(),
   netRevenue: money,
   netProfit: money,
+  /** Household: profit after the estimated tax (null for a company). */
+  profitAfterTax: money.nullable(),
   problems: z.array(z.string()),
   hasActivity: z.boolean(),
 });

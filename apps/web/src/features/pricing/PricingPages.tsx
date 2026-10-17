@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { money, parseMoney } from '@/lib/format';
+import { useBusinessToday } from '@/lib/business-date';
 
 const CH: { key: Channel; label: string }[] = [
   { key: 'DINE_IN', label: 'Tại quán' },
@@ -341,7 +342,8 @@ export function CostSheetPage() {
 function ApplyPrices({ dishId, store, app }: { dishId: number; store: string | null; app: string | null }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [from, setFrom] = useState(today());
+  const bizToday = useBusinessToday();
+  const [from, setFrom] = useState(bizToday);
   const apply = useMutation({
     mutationFn: async () => {
       if (store)

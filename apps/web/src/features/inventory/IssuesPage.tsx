@@ -5,7 +5,7 @@ import { Lock, Plus, Trash2 } from 'lucide-react';
 import type { IssueInput, IssueSummary } from '@ketoan/api/contracts';
 import type { IssueReason } from '@ketoan/api/domain';
 import { PageHeader } from '@/components/PageHeader';
-import { MonthPicker, thisMonth, today } from '@/components/MonthPicker';
+import { MonthPicker, thisMonth } from '@/components/MonthPicker';
 import { IngredientPicker, useIngredients } from '@/components/IngredientPicker';
 import { ReasonDialog } from '@/components/ReasonDialog';
 import { Button, IconButton } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { dateVi, money, parseQty, qty } from '@/lib/format';
+import { useBusinessToday } from '@/lib/business-date';
 
 export const REASON: Record<IssueReason, { label: string; tone: BadgeTone; hint?: string }> = {
   SALE_USE: { label: 'Tiêu hao bán hàng', tone: 'primary' },
@@ -131,7 +132,8 @@ function IssueForm({
   const toast = useToast();
   const { data: ingredients } = useIngredients();
   const [reasonV, setReason] = useState<Manual>(defaultReason);
-  const [date, setDate] = useState(defaultMonth === thisMonth() ? today() : `${defaultMonth}-01`);
+  const bizToday = useBusinessToday();
+  const [date, setDate] = useState(defaultMonth === thisMonth() ? bizToday : `${defaultMonth}-01`);
   const [note, setNote] = useState('');
   const [lines, setLines] = useState<Line[]>([newLine()]);
   const setLine = (key: number, p: Partial<Line>) =>

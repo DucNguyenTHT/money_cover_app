@@ -430,7 +430,12 @@ function flowsSection() {
     flow('Kỳ kế toán (tháng)', 'Lãi lỗ tổng hợp theo tháng; quý / năm = cộng các tháng.', [
       ['Chi phí chung', 'mặt bằng, lương, điện nước… theo tháng', 'overhead_expenses'],
       ['Báo cáo lãi lỗ', 'TypedSQL lấy số thô → domain/period/pnl.ts dựng các dòng', 'prisma/sql/*.sql'],
-      ['Khoá sổ', 'chặn mọi ghi vào tháng; chụp số liệu', 'period_locks · monthly_closings'],
+      [
+        'Thuế tạm tính',
+        'hộ kinh doanh: GTGT + TNCN luỹ kế từ tháng 1 theo ngành của nhóm món (domain/tax/household.ts); báo cáo Thuế phải nộp',
+        'settings.tax_regime · dish_categories.tax_group',
+      ],
+      ['Khoá sổ', 'chặn mọi ghi vào tháng; chụp số liệu kèm thuế', 'period_locks · monthly_closings'],
       ['Mở khoá', 'ADMIN, bắt buộc lý do, ghi lịch sử', 'audit_logs'],
     ]),
     flow('Chứng từ', 'Kho lưu trữ, không ảnh hưởng số liệu kho / lãi lỗ.', [

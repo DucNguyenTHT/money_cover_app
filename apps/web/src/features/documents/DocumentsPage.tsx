@@ -12,7 +12,7 @@ import {
 import { useAuth } from '@/auth/AuthProvider';
 import { FormError } from '@/auth/AuthCard';
 import { PageHeader } from '@/components/PageHeader';
-import { MonthPicker, YearPicker, thisMonth, today } from '@/components/MonthPicker';
+import { MonthPicker, YearPicker, thisMonth } from '@/components/MonthPicker';
 import { ReasonDialog } from '@/components/ReasonDialog';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card, EmptyState, Segmented, Select, type BadgeTone } from '@/components/ui/controls';
@@ -33,6 +33,7 @@ import {
   uploadSummary,
 } from './DocumentFiles';
 import { DriveDialog } from './DriveDialog';
+import { useBusinessToday } from '@/lib/business-date';
 
 const KIND_TONE: Record<DocumentKind, BadgeTone> = { PURCHASE: 'primary', SALE: 'good', OTHER: 'neutral' };
 
@@ -44,6 +45,7 @@ export function DocumentsPage() {
   // Filters live in the URL so "back" and shared links keep the same month / year.
   const [params, setParams] = useSearchParams();
   const period = params.get('period') ?? thisMonth();
+  const bizToday = useBusinessToday();
   const kind = (params.get('kind') as DocumentKind | null) ?? undefined;
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<number | 'new' | null>(null);
@@ -227,7 +229,7 @@ export function DocumentsPage() {
       {open !== null && (
         <DocumentEditor
           id={open === 'new' ? null : open}
-          defaultDate={today().startsWith(period) ? today() : byYear ? `${period}-01-01` : `${period}-01`}
+          defaultDate={bizToday.startsWith(period) ? bizToday : byYear ? `${period}-01-01` : `${period}-01`}
           defaultKind={kind}
           onClose={() => setOpen(null)}
           onCreated={(id) => setOpen(id)}
