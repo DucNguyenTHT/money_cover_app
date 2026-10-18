@@ -85,6 +85,23 @@ describe('household tax (hộ kinh doanh)', () => {
     expect(r.total).toMatchObject({ revenue: '1200000000', vat: '28800000', pit: '180000000' });
     expect(r.pitIncomeRate).toBe(15);
 
+    // Both PIT methods side by side: (1,2 − 1) tỷ × 1,5% = 3 tr vs 1,2 tỷ profit × 15% = 180 tr.
+    const cmp = (res.body as { comparison: { actual: unknown; projected: unknown } }).comparison;
+    expect(cmp.actual).toMatchObject({
+      cheaper: 'REVENUE',
+      methods: [
+        { method: 'REVENUE', pit: '3000000', total: '31800000' },
+        { method: 'INCOME', pit: '180000000', total: '208800000' },
+      ],
+    });
+    // Projected year: 2 months at 600 tr average → 7,2 tỷ, above 3 tỷ so only "theo lãi" is allowed.
+    expect(cmp.projected).toMatchObject({
+      basisMonths: 2,
+      revenue: '7200000000',
+      revenueMethodAllowed: false,
+      cheaper: 'INCOME',
+    });
+
     // The P&L shows the same tax and the profit after it.
     const pnl = await client.reports.pnlMonth({ params: { month: '2026-02' } });
     const lines = (pnl.body as { lines: { key: string; amount: string; label: string }[] }).lines;

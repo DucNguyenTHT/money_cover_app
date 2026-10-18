@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compareMethods,
   householdTaxByMonth,
   householdVatRate,
   pitIncomeRate,
+  projectYear,
   quarterDeadline,
   spreadRevenue,
   type TaxMonthInput,
@@ -90,5 +92,43 @@ describe('spreadRevenue', () => {
       PRODUCTION: '825',
     });
     expect(spreadRevenue(500, {})).toEqual({ PRODUCTION: '500' });
+  });
+});
+
+describe('compareMethods / projectYear', () => {
+  const year = (food: number, profit: number) =>
+    Array.from({ length: 12 }, (_, i) => month(`2026-${String(i + 1).padStart(2, '0')}`, food, profit));
+
+  it('1,8 tỷ, lãi 300 tr: theo doanh thu 55,2 tr vs theo lãi 88,2 tr → theo doanh thu rẻ hơn', () => {
+    const c = compareMethods(year(150e6, 25e6));
+    expect(c.methods).toEqual([
+      { method: 'REVENUE', vat: '43200000', pit: '12000000', total: '55200000' },
+      { method: 'INCOME', vat: '43200000', pit: '45000000', total: '88200000' },
+    ]);
+    expect(c).toMatchObject({ cheaper: 'REVENUE', breakEvenProfit: '80000000', revenueMethodAllowed: true });
+  });
+
+  it('thin profit (lãi 60 tr) → theo lãi rẻ hơn', () => {
+    const c = compareMethods(year(150e6, 5e6));
+    expect(c.methods[1]!.pit).toBe('9000000');
+    expect(c.cheaper).toBe('INCOME');
+  });
+
+  it('over 3 tỷ only "theo lãi" is allowed; under 1 tỷ nothing to compare', () => {
+    expect(compareMethods(year(300e6, 30e6))).toMatchObject({
+      revenueMethodAllowed: false,
+      cheaper: 'INCOME',
+    });
+    expect(compareMethods(year(50e6, 10e6))).toMatchObject({ cheaper: null, breakEvenProfit: null });
+  });
+
+  it('projects the months with data to a full year at their average', () => {
+    const p = projectYear(
+      [month('2026-01', 0, 0), month('2026-09', 140e6, 20e6), month('2026-10', 160e6, 30e6)],
+      2026,
+    );
+    expect(p).toHaveLength(12);
+    expect(p[0]).toMatchObject({ month: '2026-01', netProfit: '25000000' });
+    expect(p[0]!.revenueByGroup.PRODUCTION).toBe('150000000');
   });
 });

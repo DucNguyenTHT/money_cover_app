@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Lock } from 'lucide-react';
-import type { TaxReport } from '@ketoan/api/contracts';
+import type { MethodComparisonDto, TaxReport } from '@ketoan/api/contracts';
+import type { PitMethod } from '@ketoan/api/domain';
 import { PageHeader } from '@/components/PageHeader';
 import { YearPicker, thisMonth, today } from '@/components/MonthPicker';
-import { ExportButton, ReportTable, StatCard } from '@/components/report';
-import { Card } from '@/components/ui/controls';
-import { Spinner } from '@/components/ui/Button';
+import { ExportButton, ReportTable, Signed, StatCard } from '@/components/report';
+import { Badge, Card } from '@/components/ui/controls';
+import { Button, Spinner } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
+import { cn } from '@/lib/cn';
 import { client, ok } from '@/lib/api-client';
 import { dateVi, money } from '@/lib/format';
 
@@ -105,6 +108,8 @@ function HouseholdView({ r }: { r: TaxReport }) {
           }
         />
       </div>
+
+      {r.comparison && <MethodCompare r={r} />}
 
       <Card className="p-4 text-[13px]">
         <h2 className="mb-2 font-semibold text-ink-strong">Cách tính (hộ kinh doanh)</h2>
@@ -210,6 +215,138 @@ function HouseholdView({ r }: { r: TaxReport }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+const METHOD_LABEL: Record<PitMethod, string> = { REVENUE: 'Theo doanh thu', INCOME: 'Theo lãi' };
+const METHOD_FORMULA: Record<PitMethod, string> = {
+  REVENUE: '(Doanh thu − 1 tỷ) × tỷ lệ ngành',
+  INCOME: 'Lãi × 15% / 17% / 20%',
+};
+
+/** One block (so far / whole-year estimate): both methods side by side, cheaper one marked. */
+function CompareBlock({ title, c, current }: { title: string; c: MethodComparisonDto; current: PitMethod }) {
+  const under = c.cheaper === null && !c.breakEvenProfit;
+  const [a, b] = c.methods as [MethodComparisonDto['methods'][0], MethodComparisonDto['methods'][0]];
+  const diff = Math.abs(Number(a.total) - Number(b.total));
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-[13px] font-semibold text-ink-strong">{title}</h3>
+        <span className="text-xs text-muted">
+          Doanh thu {money(c.revenue)} · lãi trước thuế <Signed v={c.profit} lossTag={false} />
+        </span>
+      </div>
+      {under ? (
+        <p className="rounded-ctl bg-good-soft px-3 py-2 text-[13px] text-good">
+          Doanh thu năm chưa vượt 1 tỷ: cả hai cách đều không phải nộp thuế.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {c.methods.map((m) => {
+            const best = c.cheaper === m.method;
+            const blocked = m.method === 'REVENUE' && !c.revenueMethodAllowed;
+            return (
+              <div
+                key={m.method}
+                className={cn(
+                  'flex flex-col gap-1 rounded-card border p-3',
+                  best ? 'border-good bg-good-soft/60' : 'border-line',
+                  blocked && 'opacity-60',
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[13px] font-semibold text-ink-strong">{METHOD_LABEL[m.method]}</span>
+                  {best && <Badge tone="good">Nộp ít hơn</Badge>}
+                  {current === m.method && <Badge tone="primary">Đang chọn</Badge>}
+                </div>
+                <span className="text-[11px] text-faint">{METHOD_FORMULA[m.method]}</span>
+                <dl className="mt-1 grid grid-cols-[1fr_auto] gap-x-2 gap-y-0.5 text-[13px]">
+                  <dt className="text-muted">Thuế GTGT</dt>
+                  <dd className="num text-right">{money(m.vat)}</dd>
+                  <dt className="text-muted">Thuế TNCN</dt>
+                  <dd className="num text-right">{money(m.pit)}</dd>
+                  <dt className="font-semibold">Tổng</dt>
+                  <dd className="num text-right text-base font-bold text-ink-strong">{money(m.total)}</dd>
+                </dl>
+                {blocked && (
+                  <span className="text-xs text-warn">Không áp dụng được: doanh thu năm trên 3 tỷ</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!under && c.cheaper && (
+        <p className="text-[13px] text-muted">
+          <b className="text-ink">{METHOD_LABEL[c.cheaper]}</b> nộp ít hơn{' '}
+          <b className="num text-good">{money(diff)}</b>
+          {c.revenueMethodAllowed && c.breakEvenProfit && (
+            <>
+              . Hai cách bằng nhau khi lãi = <b className="num text-ink">{money(c.breakEvenProfit)}</b>: lãi
+              thấp hơn mức này thì tính theo lãi có lợi, cao hơn thì tính theo doanh thu có lợi
+            </>
+          )}
+          .
+        </p>
+      )}
+    </div>
+  );
+}
+
+function MethodCompare({ r }: { r: TaxReport }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const cmp = r.comparison!;
+  // Recommend from the whole-year estimate when there is one (the year's total decides the tax).
+  const basis = cmp.projected ?? cmp.actual;
+  const switchTo = basis.cheaper && basis.cheaper !== r.pitMethod ? basis.cheaper : null;
+  const save = useMutation({
+    mutationFn: async (m: PitMethod) =>
+      ok(await client.settings.update({ body: { settings: { household_pit_method: m } } })),
+    onSuccess: (_d, m) => {
+      toast(`App sẽ tạm tính thuế TNCN ${METHOD_LABEL[m].toLowerCase()}`);
+      void qc.invalidateQueries({ queryKey: ['reports'] });
+      void qc.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="font-semibold text-ink-strong">So sánh 2 cách tính thuế TNCN</h2>
+          <p className="text-[13px] text-muted">
+            Thuế GTGT giống nhau ở cả hai cách; chỉ thuế TNCN khác nhau. Tính trên số liệu thật của quán.
+          </p>
+        </div>
+        {switchTo && (
+          <Button
+            variant="tonal"
+            loading={save.isPending}
+            onClick={() => save.mutate(switchTo)}
+            title="Chỉ đổi cách app tạm tính; đổi cách nộp thật phải đăng ký với cơ quan thuế"
+          >
+            Tạm tính {METHOD_LABEL[switchTo].toLowerCase()}
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+        <CompareBlock title={`Từ đầu năm ${r.year} đến nay (thực tế)`} c={cmp.actual} current={r.pitMethod} />
+        {cmp.projected && (
+          <CompareBlock
+            title={`Ước cả năm ${r.year} (trung bình ${cmp.projected.basisMonths} tháng có số liệu × 12)`}
+            c={cmp.projected}
+            current={r.pitMethod}
+          />
+        )}
+      </div>
+      <p className="mt-3 border-t border-line-soft pt-2 text-xs text-faint">
+        Thuế tính theo cả năm, nên hãy chọn theo số <b>ước cả năm</b>. "Lãi" là lợi nhuận trước thuế trong báo
+        cáo lãi lỗ — khi tính theo lãi, cơ quan thuế chỉ công nhận chi phí có hoá đơn, chứng từ, nên lãi tính
+        thuế có thể cao hơn. Muốn đổi cách nộp thật phải đăng ký với Chi cục Thuế; nút trên chỉ đổi cách app
+        tạm tính.
+      </p>
+    </Card>
   );
 }
 

@@ -130,6 +130,96 @@ export function householdTaxByMonth(months: readonly TaxMonthInput[], method: Pi
   });
 }
 
+export interface MethodResult {
+  method: PitMethod;
+  vat: string;
+  pit: string;
+  total: string;
+}
+
+export interface MethodComparison {
+  revenue: string;
+  profit: string;
+  methods: MethodResult[];
+  /** "Theo doanh thu" is only allowed while the year's revenue is at most 3 tỷ. */
+  revenueMethodAllowed: boolean;
+  /** Profit at which both PIT methods cost the same (null under the threshold). */
+  breakEvenProfit: string | null;
+  cheaper: PitMethod | null;
+}
+
+/** Both PIT methods on the same months (one calendar year), for the owner to choose. */
+export function compareMethods(months: readonly TaxMonthInput[]): MethodComparison {
+  const methods = (['REVENUE', 'INCOME'] as const).map((method) => {
+    const last = householdTaxByMonth(months, method).at(-1);
+    const vat = last?.vatYtd ?? '0';
+    const pit = last?.pitYtd ?? '0';
+    return { method, vat, pit, total: D(vat).add(pit).toString() };
+  });
+  const byGroup: Record<TaxGroup, Decimal> = {
+    DISTRIBUTION: ZERO,
+    SERVICE: ZERO,
+    PRODUCTION: ZERO,
+    OTHER: ZERO,
+  };
+  let profit = ZERO;
+  for (const m of months) {
+    profit = profit.add(m.netProfit);
+    for (const g of TAX_GROUPS) byGroup[g] = byGroup[g].add(m.revenueByGroup[g] ?? 0);
+  }
+  const revenue = TAX_GROUPS.reduce((s, g) => s.add(byGroup[g]), ZERO);
+  let breakEvenProfit: string | null = null;
+  if (revenue.gt(HOUSEHOLD_THRESHOLD)) {
+    // profit × incomeRate = (revenue − threshold) × weighted group PIT rate
+    const weighted = TAX_GROUPS.reduce((s, g) => s.add(byGroup[g].mul(TAX_GROUP_INFO[g].pit)), ZERO).div(
+      revenue,
+    );
+    breakEvenProfit = roundVnd(
+      revenue.sub(HOUSEHOLD_THRESHOLD).mul(weighted).div(pitIncomeRate(revenue)),
+    ).toString();
+  }
+  const [rev, inc] = methods as [MethodResult, MethodResult];
+  const revenueMethodAllowed = revenue.lte(3_000_000_000);
+  const cheaper =
+    D(rev.total).eq(inc.total) || !revenue.gt(HOUSEHOLD_THRESHOLD)
+      ? null
+      : !revenueMethodAllowed || D(inc.total).lt(rev.total)
+        ? 'INCOME'
+        : 'REVENUE';
+  return {
+    revenue: revenue.toString(),
+    profit: profit.toString(),
+    methods,
+    revenueMethodAllowed,
+    breakEvenProfit,
+    cheaper,
+  };
+}
+
+/**
+ * The months so far extended to a full year at their monthly average (same months' calendar dates, so the
+ * temporary VAT cut still applies where it should). Used for the "ước cả năm" comparison.
+ */
+export function projectYear(months: readonly TaxMonthInput[], year: number): TaxMonthInput[] {
+  const withData = months.filter(
+    (m) => !D(m.netProfit).isZero() || TAX_GROUPS.some((g) => D(m.revenueByGroup[g] ?? 0).gt(0)),
+  );
+  if (!withData.length) return [];
+  const n = withData.length;
+  const avgGroup = Object.fromEntries(
+    TAX_GROUPS.map((g) => [
+      g,
+      roundVnd(withData.reduce((s, m) => s.add(m.revenueByGroup[g] ?? 0), ZERO).div(n)).toString(),
+    ]),
+  ) as RevenueByGroup;
+  const avgProfit = roundVnd(withData.reduce((s, m) => s.add(m.netProfit), ZERO).div(n)).toString();
+  return Array.from({ length: 12 }, (_, i) => ({
+    month: `${year}-${String(i + 1).padStart(2, '0')}`,
+    revenueByGroup: avgGroup,
+    netProfit: avgProfit,
+  }));
+}
+
 /** Quarterly return deadline: last day of the month after the quarter ("2026-Q4" → 2027-01-31). */
 export function quarterDeadline(year: number, quarter: 1 | 2 | 3 | 4): string {
   const m = quarter * 3 + 1; // month after the quarter

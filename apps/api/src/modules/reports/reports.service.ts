@@ -56,9 +56,11 @@ import {
 import {
   HOUSEHOLD_THRESHOLD,
   TAX_GROUP_INFO,
+  compareMethods,
   householdTaxByMonth,
   householdVatRate,
   pitIncomeRate,
+  projectYear,
   quarterDeadline,
   spreadRevenue,
   type RevenueByGroup,
@@ -307,6 +309,24 @@ export async function taxReport(year: number): Promise<TaxReport> {
       pitRate: String(TAX_GROUP_INFO[g].pit),
     })),
     pitIncomeRate: pitIncomeRate(revenueYtd),
+    comparison: household ? comparisonOf([...data], year, year === thisYear) : null,
+  };
+}
+
+/** Both PIT methods on this year's months; for the current year also projected to 12 months. */
+function comparisonOf(entries: [string, MonthData][], year: number, current: boolean) {
+  const inputs = entries.map(([month, d]) => ({
+    month,
+    revenueByGroup: revenueGroups(d.figures),
+    netProfit: pnlTotals(d.figures).netProfit.toString(),
+  }));
+  const projection = current ? projectYear(inputs, year) : [];
+  const basisMonths = inputs.filter(
+    (m) => !D(m.netProfit).isZero() || Object.values(m.revenueByGroup).some((v) => D(v ?? 0).gt(0)),
+  ).length;
+  return {
+    actual: compareMethods(inputs),
+    projected: projection.length && basisMonths < 12 ? { ...compareMethods(projection), basisMonths } : null,
   };
 }
 

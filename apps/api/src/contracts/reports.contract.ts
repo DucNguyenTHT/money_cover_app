@@ -278,6 +278,18 @@ export type Dashboard = z.infer<typeof dashboardSchema>;
 
 export const TAX_REGIME_VALUES = ['HOUSEHOLD', 'DEDUCTION'] as const;
 
+const pitMethod = z.enum(['INCOME', 'REVENUE']);
+const methodComparison = z.object({
+  revenue: money,
+  profit: money,
+  methods: z.array(z.object({ method: pitMethod, vat: money, pit: money, total: money })),
+  revenueMethodAllowed: z.boolean(),
+  /** Profit at which both PIT methods cost the same. */
+  breakEvenProfit: money.nullable(),
+  cheaper: pitMethod.nullable(),
+});
+export type MethodComparisonDto = z.infer<typeof methodComparison>;
+
 export const taxReportSchema = z.object({
   year: z.number(),
   regime: z.enum(TAX_REGIME_VALUES),
@@ -320,6 +332,14 @@ export const taxReportSchema = z.object({
   ),
   /** PIT rate on profit for the year's revenue (household, theo lãi). */
   pitIncomeRate: z.number(),
+  /** Household: both PIT methods side by side — so far this year and projected to the full year. */
+  comparison: z
+    .object({
+      actual: methodComparison,
+      /** Months with data averaged over 12 months (null for a past year or without data). */
+      projected: methodComparison.extend({ basisMonths: z.number() }).nullable(),
+    })
+    .nullable(),
 });
 export type TaxReport = z.infer<typeof taxReportSchema>;
 
