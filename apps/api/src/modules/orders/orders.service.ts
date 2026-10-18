@@ -19,13 +19,9 @@ import type {
   payInput,
 } from '../../contracts/orders.contract';
 import { fromDbDate, toDbDate } from '../../domain/business-date';
-import {
-  PRICE_TYPE_BY_CHANNEL,
-  type Channel,
-  type DiscountType,
-  type OrderStatus,
-  type Station,
-} from '../../domain/enums';
+import { sellingPrice } from '../../domain/pricing/price-list';
+import { priceEntries } from '../menu/menu.service';
+import { type Channel, type DiscountType, type OrderStatus, type Station } from '../../domain/enums';
 import { D, Decimal, ZERO, allocateVnd, roundVnd } from '../../domain/money';
 import { discountPct, orderTotals } from '../../domain/orders/totals';
 import { checkPayments } from '../../domain/orders/payment';
@@ -353,10 +349,10 @@ async function nextCode(tx: Tx, branchId: number, date: string) {
   return orderCode(date, row!.last_no);
 }
 
-/** Add dishes to an open order at the price for its channel and business date. */
+/** Add dishes to an open order at the price for its channel (and delivery app) and business date. */
 async function addItemsTx(
   tx: Tx,
-  o: { id: number; channel: Channel; businessDate: Date },
+  o: { id: number; channel: Channel; deliveryAppId: number | null; businessDate: Date },
   items: { dishId: number; qty: number; note?: string | null }[],
 ) {
   const date = fromDbDate(o.businessDate);
@@ -372,9 +368,7 @@ async function addItemsTx(
     const d = dishes.find((x) => x.id === it.dishId);
     if (!d || !d.active) throw badRequest('Món không tồn tại hoặc đã ngừng bán');
     if (d.soldOutDate && fromDbDate(d.soldOutDate) === today) throw conflict('SOLD_OUT', `${d.name} đã hết`);
-    const priceOf = (type: 'STORE' | 'APP') =>
-      d.prices.find((p) => p.priceType === type && fromDbDate(p.effectiveFrom) <= date)?.price;
-    const price = priceOf(PRICE_TYPE_BY_CHANNEL[o.channel]) ?? priceOf('STORE');
+    const price = sellingPrice(priceEntries(d.prices), o.channel, o.deliveryAppId, date);
     if (!price) throw badRequest(`${d.name} chưa có giá bán`);
     const recipe = pickVersion(
       d.recipes.map((r) => ({ ...r, effectiveFrom: fromDbDate(r.effectiveFrom) })),

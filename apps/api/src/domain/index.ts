@@ -6,6 +6,7 @@ export * from './auth/pin-policy';
 export * from './inventory/fifo';
 export * from './recipes/recipes';
 export * from './pricing/pricing';
+export * from './pricing/price-list';
 export * from './orders/totals';
 export * from './orders/payment';
 export * from './orders/cancel-policy';

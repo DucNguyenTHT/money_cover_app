@@ -157,6 +157,93 @@ describe('pricing', () => {
   });
 });
 
+describe('price per delivery app', () => {
+  async function withTwoApps() {
+    const s = await setupPho();
+    const apps = (await s.c.venue.listDeliveryApps()).body as { id: number; name: string }[];
+    const grab = apps.find((a) => a.name === 'Grab')!.id;
+    const shopee = (
+      (await s.c.venue.createDeliveryApp({ body: { name: 'Shopee', commissionPct: '20', active: true } }))
+        .body as { id: number }
+    ).id;
+    // Grab gets its own price; Shopee keeps the general app price (114.000).
+    const res = await s.c.menu.setPrice({
+      params: { id: s.dishId },
+      body: { priceType: 'APP', deliveryAppId: grab, price: '120000', effectiveFrom: s.today },
+    });
+    expect(res.status).toBe(200);
+    return { ...s, grab, shopee };
+  }
+
+  it('menu lists the own app prices next to the general one', async () => {
+    const { c, grab } = await withTwoApps();
+    const [dish] = (await c.menu.listDishes({ query: {} })).body as {
+      appPrice: string;
+      appPrices: { deliveryAppId: number; price: string }[];
+    }[];
+    expect(dish).toMatchObject({ appPrice: '114000', appPrices: [{ deliveryAppId: grab, price: '120000' }] });
+  });
+
+  it('an app order is priced for its app, falling back to the general app price', async () => {
+    const { c, dishId, grab, shopee } = await withTwoApps();
+    const open = (deliveryAppId: number) =>
+      c.orders.open({
+        body: {
+          channel: 'APP',
+          tableId: null,
+          deliveryAppId,
+          appOrderCode: null,
+          guestCount: 1,
+          note: null,
+          items: [{ dishId, qty: 1 }],
+        },
+      });
+    const g = (await open(grab)).body as { items: { unitPrice: string }[] };
+    const s = (await open(shopee)).body as { items: { unitPrice: string }[] };
+    expect(g.items[0]!.unitPrice).toBe('120000');
+    expect(s.items[0]!.unitPrice).toBe('114000');
+  });
+
+  it('cost sheet shows each app with its own commission and suggested price', async () => {
+    const { c, dishId, grab, shopee } = await withTwoApps();
+    const res = await c.pricing.detail({ params: { id: dishId }, query: { appId: grab } });
+    const row = res.body.row as unknown as {
+      channels: { APP: { price: string } };
+      apps: { deliveryAppId: number; price: string; ownPrice: boolean; suggestedPrice: string }[];
+    };
+    expect(row.channels.APP.price).toBe('120000');
+    // Same net profit as the store: (80.000 × 0,9 − 28.000 + 30.000) ÷ (0,9 − commission), rounded up.
+    // Grab 25%: 74.000 ÷ 0,65 → 114.000; Shopee 20%: 74.000 ÷ 0,7 → 106.000.
+    expect(row.apps).toEqual([
+      expect.objectContaining({
+        deliveryAppId: grab,
+        price: '120000',
+        ownPrice: true,
+        suggestedPrice: '114000',
+      }),
+      expect.objectContaining({
+        deliveryAppId: shopee,
+        price: '114000',
+        ownPrice: false,
+        suggestedPrice: '106000',
+      }),
+    ]);
+  });
+
+  it('two general app prices on the same day are still one row', async () => {
+    const { c, dishId, today } = await withTwoApps();
+    for (const price of ['115000', '116000'])
+      await c.menu.setPrice({
+        params: { id: dishId },
+        body: { priceType: 'APP', price, effectiveFrom: today },
+      });
+    const general = await prisma.dishPrice.findMany({
+      where: { dishId, priceType: 'APP', deliveryAppId: null, effectiveFrom: toDbDate(today) },
+    });
+    expect(general.map((p) => p.price.toString())).toEqual(['116000']);
+  });
+});
+
 describe('overheads', () => {
   it('saves a month and refuses changes to a locked month', async () => {
     const { client, user } = await makeUser({ username: 'quanly', role: 'ADMIN' });

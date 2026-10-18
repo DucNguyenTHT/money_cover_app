@@ -37,7 +37,10 @@ export const dishSchema = dishInput.extend({
   categoryName: z.string(),
   station: z.enum(STATIONS),
   storePrice: decimalString.nullable(),
+  /** General app price (falls back to the store price). */
   appPrice: decimalString.nullable(),
+  /** Apps with their own price today; other apps use appPrice. */
+  appPrices: z.array(z.object({ deliveryAppId: z.number(), price: decimalString })),
   soldOut: z.boolean(),
   hasRecipe: z.boolean(),
 });
@@ -73,6 +76,7 @@ export type RecipeDto = z.infer<typeof recipeSchema>;
 export const priceSchema = z.object({
   id: z.number(),
   priceType: z.enum(PRICE_TYPES),
+  deliveryAppId: z.number().nullable(),
   price: decimalString,
   effectiveFrom: isoDate,
 });
@@ -139,7 +143,13 @@ export const menuContract = c.router(
       method: 'POST',
       path: '/api/dishes/:id/prices',
       pathParams: id,
-      body: z.object({ priceType: z.enum(PRICE_TYPES), price: money, effectiveFrom: isoDate }),
+      body: z.object({
+        priceType: z.enum(PRICE_TYPES),
+        /** APP only: price for this app alone; null = general app price. */
+        deliveryAppId: z.number().int().nullable().default(null),
+        price: money,
+        effectiveFrom: isoDate,
+      }),
       responses: { 200: dishDetail, ...commonErrors },
       metadata: admin,
       summary: 'Áp dụng giá bán mới từ một ngày',

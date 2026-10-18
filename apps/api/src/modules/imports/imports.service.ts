@@ -12,6 +12,7 @@ import { D } from '../../domain/money';
 import type { ImportKind, ImportPreview } from '../../contracts/imports.contract';
 import { businessToday } from '../settings/settings.service';
 import { settlePendingWithLot } from '../inventory/stock-engine';
+import { unitChange } from '../catalog/ingredients.service';
 
 const FIELD_KEYS = [
   'code',
@@ -96,8 +97,27 @@ export const SPECS: Record<ImportKind, { title: string; columns: ColumnSpec[] }>
 
 // ---------------------------------------------------------------- template & parsing
 
+/** Optional dish-sheet column "Giá <app>" per active delivery app: that app's own price. */
+const appPriceHeader = (name: string) => `Giá ${name}`;
+const activeApps = () => prisma.deliveryApp.findMany({ where: { active: true }, orderBy: { id: 'asc' } });
+
 export async function template(kind: ImportKind): Promise<Buffer> {
-  const spec = SPECS[kind];
+  const base = SPECS[kind];
+  const spec: { title: string; columns: ColumnSpec[] } =
+    kind === 'dishes'
+      ? {
+          ...base,
+          columns: [
+            ...base.columns,
+            ...(await activeApps()).map((a) => ({
+              key: 'appPrice' as const,
+              header: appPriceHeader(a.name),
+              example: '',
+              note: `Giá riêng trên ${a.name}. Để trống = dùng "Giá app"`,
+            })),
+          ],
+        }
+      : base;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(spec.title);
   ws.addRow(spec.columns.map((c) => c.header + (c.required ? ' *' : '')));
@@ -125,7 +145,14 @@ const cellText = (v: ExcelJS.CellValue): string => {
   return String(v).trim();
 };
 
-async function parse(kind: ImportKind, fileBase64: string): Promise<{ row: number; data: Fields }[]> {
+interface ParsedRow {
+  row: number;
+  data: Fields;
+  /** Cells of columns outside the spec, by lower-cased header. */
+  extra: Record<string, string>;
+}
+
+async function parse(kind: ImportKind, fileBase64: string): Promise<ParsedRow[]> {
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(Buffer.from(fileBase64, 'base64') as unknown as ArrayBuffer);
@@ -144,7 +171,10 @@ async function parse(kind: ImportKind, fileBase64: string): Promise<{ row: numbe
   const missing = spec.columns.filter((c) => c.required && (colOf.get(c.key) ?? -1) < 0).map((c) => c.header);
   if (missing.length) throw badRequest(`Thiếu cột: ${missing.join(', ')}. Hãy dùng file mẫu.`);
 
-  const out: { row: number; data: Fields }[] = [];
+  const known = new Set(colOf.values());
+  const extraCols = headers.flatMap((h, i) => (i > 0 && h && !known.has(i) ? [[h, i] as const] : []));
+
+  const out: ParsedRow[] = [];
   ws.eachRow((r, rowNumber) => {
     if (rowNumber === 1) return;
     const data = Object.fromEntries(FIELD_KEYS.map((k) => [k, ''])) as Fields;
@@ -152,8 +182,9 @@ async function parse(kind: ImportKind, fileBase64: string): Promise<{ row: numbe
       const idx = colOf.get(c.key) ?? -1;
       data[c.key] = idx > 0 ? cellText(r.getCell(idx).value) : '';
     }
-    if (Object.values(data).every((v) => v === '')) return;
-    out.push({ row: rowNumber, data });
+    const extra = Object.fromEntries(extraCols.map(([h, i]) => [h, cellText(r.getCell(i).value)]));
+    if ([...Object.values(data), ...Object.values(extra)].every((v) => v === '')) return;
+    out.push({ row: rowNumber, data, extra });
   });
   if (out.length === 0) throw badRequest('File không có dòng dữ liệu nào');
   if (out.length > 2000) throw badRequest('Tối đa 2.000 dòng mỗi lần nhập');
@@ -179,7 +210,7 @@ interface Planned {
   ) => Promise<void>;
 }
 
-async function plan(kind: ImportKind, rows: { row: number; data: Fields }[]): Promise<Planned[]> {
+async function plan(kind: ImportKind, rows: ParsedRow[]): Promise<Planned[]> {
   const seen = new Set<string>();
   const dup = (key: string, errors: string[]) => {
     if (seen.has(key)) errors.push('Trùng với dòng phía trên');
@@ -187,7 +218,13 @@ async function plan(kind: ImportKind, rows: { row: number; data: Fields }[]): Pr
   };
 
   if (kind === 'ingredients') {
-    const existing = new Map((await prisma.ingredient.findMany()).map((i) => [i.code.toLowerCase(), i]));
+    const existing = new Map(
+      (
+        await prisma.ingredient.findMany({
+          include: { _count: { select: { lots: true, recipeItems: true } } },
+        })
+      ).map((i) => [i.code.toLowerCase(), i]),
+    );
     return rows.map(({ row, data: d }) => {
       const errors: string[] = [];
       if (!d.code) errors.push('Thiếu mã');
@@ -212,6 +249,13 @@ async function plan(kind: ImportKind, rows: { row: number; data: Fields }[]): Pr
         purchaseUnit: d.purchaseUnit || null,
         purchaseFactor,
       };
+      if (
+        prev &&
+        !errors.length &&
+        (prev._count.lots > 0 || prev._count.recipeItems > 0) &&
+        unitChange(prev, { ...data, recipeFactor: String(data.recipeFactor) })
+      )
+        errors.push('Đã có tồn kho / định mức: không đổi được đơn vị kho, đơn vị định mức, hệ số quy đổi');
       return {
         row,
         action: errors.length ? 'ERROR' : prev ? 'UPDATE' : 'CREATE',
@@ -227,7 +271,8 @@ async function plan(kind: ImportKind, rows: { row: number; data: Fields }[]): Pr
 
   if (kind === 'dishes') {
     const existing = new Map((await prisma.dish.findMany()).map((x) => [x.code.toLowerCase(), x]));
-    return rows.map(({ row, data: d }) => {
+    const apps = await activeApps();
+    return rows.map(({ row, data: d, extra }) => {
       const errors: string[] = [];
       if (!d.code) errors.push('Thiếu mã món');
       if (!d.name) errors.push('Thiếu tên món');
@@ -236,6 +281,11 @@ async function plan(kind: ImportKind, rows: { row: number; data: Fields }[]): Pr
       const app = num(d.appPrice ?? '');
       if (Number.isNaN(store) || (store !== null && store < 0)) errors.push('Giá tại quán không hợp lệ');
       if (Number.isNaN(app) || (app !== null && app < 0)) errors.push('Giá app không hợp lệ');
+      const own = apps.map((a) => {
+        const price = num(extra[appPriceHeader(a.name).toLowerCase()] ?? '');
+        if (Number.isNaN(price) || (price !== null && price < 0)) errors.push(`Giá ${a.name} không hợp lệ`);
+        return { appId: a.id as number | null, price };
+      });
       dup(d.code.toLowerCase(), errors);
       const prev = existing.get(d.code.toLowerCase());
       const station = d.station?.toLowerCase() === 'bar' ? 'BAR' : 'KITCHEN';
@@ -252,17 +302,25 @@ async function plan(kind: ImportKind, rows: { row: number; data: Fields }[]): Pr
           const dish = prev
             ? await tx.dish.update({ where: { id: prev.id }, data: { name: d.name, categoryId: cat.id } })
             : await tx.dish.create({ data: { code: d.code!, name: d.name!, categoryId: cat.id } });
-          for (const [type, price] of [
-            ['STORE', store],
-            ['APP', app],
+          for (const [type, appId, price] of [
+            ['STORE', null, store],
+            ['APP', null, app],
+            ...own.map((o) => ['APP', o.appId, o.price] as const),
           ] as const) {
             if (price === null || Number.isNaN(price)) continue;
-            const key = { dishId: dish.id, priceType: type, effectiveFrom: toDbDate(ctx.date) };
-            await tx.dishPrice.upsert({
-              where: { dishId_priceType_effectiveFrom: key },
-              update: { price, createdById: ctx.userId },
-              create: { ...key, price, createdById: ctx.userId },
-            });
+            const key = {
+              dishId: dish.id,
+              priceType: type,
+              deliveryAppId: appId,
+              effectiveFrom: toDbDate(ctx.date),
+            };
+            const prevPrice = await tx.dishPrice.findFirst({ where: key });
+            if (prevPrice)
+              await tx.dishPrice.update({
+                where: { id: prevPrice.id },
+                data: { price, createdById: ctx.userId },
+              });
+            else await tx.dishPrice.create({ data: { ...key, price, createdById: ctx.userId } });
           }
         },
       };

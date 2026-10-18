@@ -12,6 +12,7 @@ export const Input = forwardRef<
       className={cn(
         'h-10 w-full rounded-ctl border border-field bg-white px-3 text-sm text-ink placeholder:text-faint',
         'focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15',
+        'read-only:bg-page read-only:text-muted',
         invalid && 'border-bad focus:border-bad focus:ring-bad/15',
         className,
       )}

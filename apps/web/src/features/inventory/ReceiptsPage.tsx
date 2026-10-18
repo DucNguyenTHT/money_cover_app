@@ -46,8 +46,14 @@ function PriceAlertBanner() {
       className="mb-3 flex items-center gap-2 rounded-ctl bg-warn-soft px-3 py-2 text-[13px] text-warn hover:underline"
     >
       <AlertTriangle size={16} className="shrink-0" />
-      Theo giá nhập mới nhất: {loss > 0 && `${loss} món đang lỗ, `}
-      {rows.length - loss > 0 && `${rows.length - loss} món vượt % nguyên liệu mục tiêu`} — xem giá gợi ý
+      Theo giá nhập mới nhất:{' '}
+      {[
+        loss > 0 && `${loss} món đang lỗ`,
+        rows.length - loss > 0 && `${rows.length - loss} món vượt % nguyên liệu mục tiêu`,
+      ]
+        .filter(Boolean)
+        .join(', ')}{' '}
+      — xem giá gợi ý
     </Link>
   );
 }

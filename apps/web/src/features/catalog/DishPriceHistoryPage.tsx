@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import type { PriceType } from '@ketoan/api/domain';
 import { PageHeader } from '@/components/PageHeader';
 import { LineChart } from '@/components/charts/LineChart';
 import { Badge, Card, EmptyState, Segmented, Select } from '@/components/ui/controls';
@@ -9,14 +8,18 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Field } from '@/components/ui/Input';
 import { client, ok } from '@/lib/api-client';
 import { dateVi, money } from '@/lib/format';
+import { priceTypeLabel, useDeliveryApps } from '@/lib/delivery-apps';
 
-const TYPE_LABEL: Record<PriceType, string> = { STORE: 'Tại quán / mang về', APP: 'App' };
+/** One price list: store, general app price, or one app's own price. */
+const listKey = (p: { priceType: string; deliveryAppId: number | null }) =>
+  p.deliveryAppId === null ? p.priceType : `APP:${p.deliveryAppId}`;
 
 /** Selling-price changes of one dish over time (the dish's price list, newest first). */
 export function DishPriceHistoryPage() {
   const [params, setParams] = useSearchParams();
   const dishId = params.get('dish') ? Number(params.get('dish')) : null;
-  const [type, setType] = useState<PriceType>('STORE');
+  const [list, setList] = useState('STORE');
+  const apps = useDeliveryApps().data;
 
   const dishes = useQuery({
     queryKey: ['dishes'],
@@ -28,20 +31,30 @@ export function DishPriceHistoryPage() {
     queryFn: async () => ok(await client.menu.getDish({ params: { id: dishId! } })),
   });
 
-  // Each change compared with the previous price of the same type.
+  // Each change compared with the previous price of the same list (type and app).
   const rows = useMemo(() => {
     const prices = dish.data?.prices ?? []; // newest first
     return prices.map((p) => {
-      const prev = prices.find((x) => x.priceType === p.priceType && x.effectiveFrom < p.effectiveFrom);
+      const prev = prices.find((x) => listKey(x) === listKey(p) && x.effectiveFrom < p.effectiveFrom);
       const diff = prev ? Number(p.price) - Number(prev.price) : null;
       const pct = prev && Number(prev.price) > 0 ? (diff! / Number(prev.price)) * 100 : null;
       return { ...p, diff, pct };
     });
   }, [dish.data]);
 
-  const hasApp = rows.some((r) => r.priceType === 'APP');
+  const lists = [...new Set(rows.map(listKey))].map((k) => ({
+    value: k,
+    label:
+      k === 'STORE'
+        ? 'Tại quán'
+        : priceTypeLabel(
+            rows.find((r) => listKey(r) === k)!,
+            apps,
+          ).replace('App · ', ''),
+  }));
+  const shownList = lists.some((l) => l.value === list) ? list : 'STORE';
   const series = rows
-    .filter((r) => r.priceType === (hasApp ? type : 'STORE'))
+    .filter((r) => listKey(r) === shownList)
     .reverse()
     .map((r) => ({ label: dateVi(r.effectiveFrom), value: Number(r.price) }));
   const d = dish.data;
@@ -88,19 +101,23 @@ export function DishPriceHistoryPage() {
                   <div className="text-2xl font-bold text-ink-strong">
                     {d.appPrice ? `${money(d.appPrice)} ₫` : '—'}
                   </div>
+                  {d.appPrices.length > 0 && (
+                    <dl className="mt-1 grid grid-cols-[auto_auto] justify-start gap-x-3 text-[13px]">
+                      {d.appPrices.map((p) => (
+                        <Fragment key={p.deliveryAppId}>
+                          <dt className="text-muted">
+                            {apps?.find((a) => a.id === p.deliveryAppId)?.name ?? `App #${p.deliveryAppId}`}
+                          </dt>
+                          <dd className="num font-semibold">{money(p.price)} ₫</dd>
+                        </Fragment>
+                      ))}
+                    </dl>
+                  )}
                 </div>
               </div>
-              {hasApp && (
-                <div>
-                  <Segmented
-                    label="Biểu đồ giá"
-                    value={type}
-                    onChange={setType}
-                    options={[
-                      { value: 'STORE', label: 'Tại quán' },
-                      { value: 'APP', label: 'App' },
-                    ]}
-                  />
+              {lists.length > 1 && (
+                <div className="overflow-x-auto">
+                  <Segmented label="Biểu đồ giá" value={shownList} onChange={setList} options={lists} />
                 </div>
               )}
               {series.length > 1 && (
@@ -111,7 +128,7 @@ export function DishPriceHistoryPage() {
                 rowKey={(r) => r.id}
                 columns={[
                   { key: 'from', header: 'Áp dụng từ', cell: (r) => dateVi(r.effectiveFrom) },
-                  { key: 'type', header: 'Loại giá', cell: (r) => TYPE_LABEL[r.priceType] },
+                  { key: 'type', header: 'Loại giá', cell: (r) => priceTypeLabel(r, apps) },
                   {
                     key: 'price',
                     header: 'Giá bán',

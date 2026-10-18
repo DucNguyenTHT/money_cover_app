@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import type { DeliveryApp, DiningTable, Printer } from '@prisma/client';
 import { prisma } from '../../core/db';
-import { notFound } from '../../core/errors';
+import { conflict, notFound } from '../../core/errors';
 import { writeAudit } from '../../core/audit';
 import { sendToPrinter, testPage } from '../../core/printing';
 import type {
@@ -70,6 +70,15 @@ export async function createTable(userId: number, input: z.infer<typeof tableInp
 export async function updateTable(userId: number, id: number, input: z.infer<typeof tableInput>) {
   const before = await prisma.diningTable.findUnique({ where: { id } });
   if (!before) throw notFound('Bàn');
+  // A hidden table drops off the floor plan: never while guests still have an unpaid order on it.
+  if (before.active && !input.active) {
+    const open = await prisma.order.count({ where: { tableId: id, status: 'OPEN' } });
+    if (open)
+      throw conflict(
+        'TABLE_IN_USE',
+        `${before.name} đang có đơn chưa thanh toán — thanh toán, huỷ hoặc chuyển bàn trước khi ẩn`,
+      );
+  }
   const t = await prisma.diningTable.update({ where: { id }, data: input });
   await writeAudit(prisma, {
     entity: 'table',

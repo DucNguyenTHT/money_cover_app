@@ -740,7 +740,10 @@ export async function dashboard(): Promise<Dashboard> {
     prisma.$queryRawTyped(reportByHour(branchId, day(today), day(today))),
     monthsWithTax(branchId, [month]).then((mp) => mp.get(month)!),
     prisma.$queryRawTyped(reportDishProfit(branchId, day(`${month}-01`), day(today), null)),
-    prisma.order.findMany({ where: { branchId, status: 'OPEN' }, select: { tableId: true } }),
+    prisma.order.findMany({
+      where: { branchId, status: 'OPEN' },
+      select: { tableId: true, businessDate: true },
+    }),
     prisma.diningTable.count({ where: { active: true } }),
     pricing.alerts(),
     prisma.issueItem.groupBy({
@@ -806,6 +809,7 @@ export async function dashboard(): Promise<Dashboard> {
       cancelledToday: t?.cancelled ?? 0,
       belowCostToday: t?.belowCost ?? 0,
       unclosedDays: monthData.flags.unclosedDays,
+      staleOpenOrders: openOrders.filter((o) => fromDbDate(o.businessDate) < today).length,
       lockedPins,
     },
     tax:

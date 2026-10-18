@@ -21,7 +21,11 @@ export const ingredientInput = z.object({
   category: z.string().trim().max(60).nullable(),
   active: z.boolean(),
 });
-export const ingredientSchema = ingredientInput.extend({ id: z.number() });
+export const ingredientSchema = ingredientInput.extend({
+  id: z.number(),
+  /** Already has stock or is in a recipe: the stock unit, recipe unit and their factor can no longer change. */
+  unitsLocked: z.boolean(),
+});
 export type IngredientDto = z.infer<typeof ingredientSchema>;
 
 export const catalogContract = c.router(

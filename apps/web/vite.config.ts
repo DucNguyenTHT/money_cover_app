@@ -4,7 +4,8 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
-const API = 'http://localhost:4000';
+/** API behind the dev proxy; the e2e stack points it at its own API (e2e/playwright.config.ts). */
+const API = process.env.API_URL ?? 'http://localhost:4000';
 
 export default defineConfig({
   plugins: [

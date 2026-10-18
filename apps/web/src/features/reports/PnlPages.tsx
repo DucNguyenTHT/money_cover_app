@@ -25,6 +25,10 @@ const monthVi = (m: string) => `${m.slice(5)}/${m.slice(0, 4)}`;
  * A deduction line is printed with a minus; a negative deduction (e.g. stocktake surplus) is a gain and prints "+".
  * Subtotals keep their own sign.
  */
+/** Tax lines are year-to-date minus the earlier months: a loss month gives back part of the tax counted before. */
+const isTaxLine = (key: string) => key === 'taxVat' || key === 'taxPit';
+const TAX_ADJUST_NOTE = 'Điều chỉnh luỹ kế: tháng lỗ làm giảm thuế đã tính cho các tháng trước trong năm';
+
 const lineAmount = (amount: string, deduct: boolean) => {
   const n = Number(amount);
   if (!deduct || n === 0) return money(n);
@@ -93,9 +97,12 @@ export function PnlMonthPage() {
                 label="Lợi nhuận sau thuế"
                 value={<Signed v={get('profitAfterTax')!.amount} />}
                 tone={Number(get('profitAfterTax')!.amount) < 0 ? 'bad' : undefined}
-                sub={`Trước thuế ${money(get('netProfit')!.amount)} · thuế tạm tính ${money(
-                  Number(get('taxVat')!.amount) + Number(get('taxPit')!.amount),
-                )}`}
+                sub={(() => {
+                  const tax = Number(get('taxVat')!.amount) + Number(get('taxPit')!.amount);
+                  return `Trước thuế ${money(get('netProfit')!.amount)} · ${
+                    tax < 0 ? `thuế điều chỉnh luỹ kế +${money(-tax)}` : `thuế tạm tính ${money(tax)}`
+                  }`;
+                })()}
               />
             ) : (
               <StatCard
@@ -137,7 +144,14 @@ export function PnlMonthPage() {
                         )}
                       >
                         <td className="px-3 py-2 text-faint">{l.no}</td>
-                        <td className={cn('whitespace-nowrap px-3 py-2', l.child && 'pl-8')}>{l.label}</td>
+                        <td className={cn('whitespace-nowrap px-3 py-2', l.child && 'pl-8')}>
+                          {l.label}
+                          {isTaxLine(l.key) && Number(l.amount) < 0 && (
+                            <span className="block whitespace-normal text-xs font-normal text-faint">
+                              {TAX_ADJUST_NOTE}
+                            </span>
+                          )}
+                        </td>
                         <td className="num px-3 py-2 text-right">
                           {l.total ? <Signed v={l.amount} strong /> : lineAmount(l.amount, l.deduct)}
                         </td>
@@ -484,7 +498,14 @@ function RangeTable({ r }: { r: RangePnl }) {
                       ) : row.total ? (
                         <Signed v={a} lossTag={false} />
                       ) : (
-                        lineAmount(a, row.deduct)
+                        <>
+                          {lineAmount(a, row.deduct)}
+                          {isTaxLine(row.key) && Number(a) < 0 && (
+                            <sup className="text-faint" title={TAX_ADJUST_NOTE}>
+                              *
+                            </sup>
+                          )}
+                        </>
                       )}
                     </td>
                   ))}
@@ -503,6 +524,9 @@ function RangeTable({ r }: { r: RangePnl }) {
           </tbody>
         </table>
       </div>
+      {r.rows.some((row) => isTaxLine(row.key) && row.amounts.some((a) => Number(a) < 0)) && (
+        <p className="border-t border-line-soft px-4 py-2.5 text-xs text-muted">* {TAX_ADJUST_NOTE}.</p>
+      )}
       {usedWarns.length > 0 && (
         <p className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line-soft px-4 py-2.5 text-xs text-muted">
           <span className="inline-flex items-center gap-1 font-semibold text-warn">

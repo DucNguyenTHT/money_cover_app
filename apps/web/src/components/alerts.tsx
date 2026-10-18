@@ -7,6 +7,7 @@ import {
   Ban,
   Bell,
   CalendarX,
+  Clock,
   KeyRound,
   Landmark,
   PackageX,
@@ -88,6 +89,12 @@ export function alertItems(d: Dashboard): AlertItem[] {
       to: '/admin/reports/cancellations',
     },
     { icon: Ban, n: d.alerts.cancelledToday, text: 'đơn bị huỷ hôm nay', to: '/admin/reports/cancellations' },
+    {
+      icon: Clock,
+      n: d.alerts.staleOpenOrders,
+      text: 'đơn còn mở từ ngày trước — thanh toán hoặc huỷ để chốt được ngày đó',
+      to: '/pos',
+    },
     {
       icon: CalendarX,
       n: d.alerts.unclosedDays,

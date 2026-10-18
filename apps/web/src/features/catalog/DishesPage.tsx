@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Calculator, Pencil, Plus, Tags, Trash2 } from 'lucide-react';
@@ -26,6 +26,7 @@ import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { dateVi, money, parseMoney, parseQty } from '@/lib/format';
 import { useBusinessToday } from '@/lib/business-date';
+import { priceTypeLabel, useDeliveryApps } from '@/lib/delivery-apps';
 
 type Row = DishDto & { cost?: PricingRow };
 
@@ -136,7 +137,16 @@ export function DishesPage() {
               header: 'Giá app',
               align: 'right',
               secondary: true,
-              cell: (r) => <span className="num">{r.appPrice ? money(r.appPrice) : '—'}</span>,
+              cell: (r) => (
+                <span className="num">
+                  {r.appPrice ? money(r.appPrice) : '—'}
+                  {r.appPrices.length > 0 && (
+                    <span className="block text-xs font-normal text-faint">
+                      +{r.appPrices.length} app giá riêng
+                    </span>
+                  )}
+                </span>
+              ),
             },
             {
               key: 'cost',
@@ -370,7 +380,10 @@ function InfoTab({
               />
             )}
           </Field>
-          <Field label="Giá trên app" hint="Để trống = dùng giá tại quán">
+          <Field
+            label="Giá trên app (chung)"
+            hint="Để trống = dùng giá tại quán. Giá riêng từng app: tab Giá bán"
+          >
             {(id, dd) => (
               <Input
                 id={id}
@@ -409,7 +422,10 @@ function InfoTab({
 function PricesTab({ dish }: { dish: DishDetail }) {
   const toast = useToast();
   const invalidate = useInvalidateMenu();
+  const apps = useDeliveryApps().data;
+  const activeApps = (apps ?? []).filter((a) => a.active);
   const [type, setType] = useState<PriceType>('STORE');
+  const [appId, setAppId] = useState<number | null>(null);
   const [price, setPrice] = useState('');
   const bizToday = useBusinessToday();
   const [from, setFrom] = useState(bizToday);
@@ -418,7 +434,12 @@ function PricesTab({ dish }: { dish: DishDetail }) {
       ok(
         await client.menu.setPrice({
           params: { id: dish.id },
-          body: { priceType: type, price: String(parseMoney(price)), effectiveFrom: from },
+          body: {
+            priceType: type,
+            deliveryAppId: type === 'APP' ? appId : null,
+            price: String(parseMoney(price)),
+            effectiveFrom: from,
+          },
         }),
       ),
     onSuccess: () => {
@@ -429,7 +450,7 @@ function PricesTab({ dish }: { dish: DishDetail }) {
   });
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Card className="p-4">
           <div className="text-[13px] text-muted">Giá tại quán / mang về hiện tại</div>
           <div className="mt-1 text-2xl font-bold text-ink-strong">
@@ -438,14 +459,39 @@ function PricesTab({ dish }: { dish: DishDetail }) {
         </Card>
         <Card className="p-4">
           <div className="text-[13px] text-muted">Giá trên app hiện tại</div>
-          <div className="mt-1 text-2xl font-bold text-ink-strong">
-            {dish.appPrice ? `${money(dish.appPrice)} ₫` : '—'}
-          </div>
+          <dl className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted">Giá chung</dt>
+            <dd className="num text-right font-bold text-ink-strong">
+              {dish.appPrice ? `${money(dish.appPrice)} ₫` : '—'}
+            </dd>
+            {activeApps.map((a) => {
+              const own = dish.appPrices.find((p) => p.deliveryAppId === a.id);
+              return (
+                <Fragment key={a.id}>
+                  <dt className="truncate">{a.name}</dt>
+                  <dd className="num text-right">
+                    {own ? (
+                      <b className="text-ink-strong">{money(own.price)} ₫</b>
+                    ) : (
+                      <span className="text-faint">theo giá chung</span>
+                    )}
+                  </dd>
+                </Fragment>
+              );
+            })}
+          </dl>
         </Card>
       </div>
       <Card className="p-4">
         <h3 className="mb-3 font-semibold text-ink-strong">Áp dụng giá mới</h3>
-        <div className="grid items-end gap-3 sm:grid-cols-[auto_1fr_1fr_auto]">
+        <div
+          className={cn(
+            'grid items-end gap-3',
+            type === 'APP'
+              ? 'sm:grid-cols-[auto_minmax(190px,1.3fr)_1fr_1fr_auto]'
+              : 'sm:grid-cols-[auto_1fr_1fr_auto]',
+          )}
+        >
           <Segmented
             label="Loại giá"
             value={type}
@@ -455,6 +501,24 @@ function PricesTab({ dish }: { dish: DishDetail }) {
               { value: 'APP', label: 'App' },
             ]}
           />
+          {type === 'APP' && (
+            <Field label="Cho app">
+              {(id) => (
+                <Select
+                  id={id}
+                  value={appId ?? ''}
+                  onChange={(e) => setAppId(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Mọi app (giá chung)</option>
+                  {activeApps.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      Chỉ {a.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          )}
           <Field label="Giá mới">
             {(id) => (
               <Input
@@ -478,7 +542,10 @@ function PricesTab({ dish }: { dish: DishDetail }) {
             Áp dụng
           </Button>
         </div>
-        <p className="mt-2 text-xs text-faint">Đơn từ ngày này dùng giá mới; đơn trước đó giữ giá cũ.</p>
+        <p className="mt-2 text-xs text-faint">
+          Đơn từ ngày này dùng giá mới; đơn trước đó giữ giá cũ.
+          {type === 'APP' && ' App không có giá riêng thì dùng giá chung.'}
+        </p>
         <div className="mt-2">
           <FormError message={save.error ? errorMessage(save.error) : null} />
         </div>
@@ -494,7 +561,7 @@ function PricesTab({ dish }: { dish: DishDetail }) {
             {
               key: 'type',
               header: 'Loại',
-              cell: (p) => (p.priceType === 'STORE' ? 'Tại quán / mang về' : 'App'),
+              cell: (p) => priceTypeLabel(p, apps),
             },
             {
               key: 'price',

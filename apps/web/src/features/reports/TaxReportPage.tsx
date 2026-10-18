@@ -171,7 +171,7 @@ function HouseholdView({ r }: { r: TaxReport }) {
             money(m.revenueYtd),
             money(m.profit),
             money(m.vat),
-            money(m.pit),
+            Number(m.pit) < 0 ? `${money(m.pit)}*` : money(m.pit),
             <b key="t">{money(Number(m.vat) + Number(m.pit))}</b>,
           ])}
           total={[
@@ -185,6 +185,12 @@ function HouseholdView({ r }: { r: TaxReport }) {
           ]}
           minWidth={820}
         />
+        {r.months.some((m) => Number(m.pit) < 0) && (
+          <p className="border-t border-line px-4 py-2.5 text-xs text-muted">
+            * Điều chỉnh luỹ kế: thuế TNCN tính trên lãi cộng dồn từ tháng 1, nên tháng lỗ làm giảm thuế đã
+            tính cho các tháng trước. Tổng cả năm vẫn đúng.
+          </p>
+        )}
       </Card>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-2">

@@ -229,19 +229,23 @@ model Dish {
 
 /// Giá bán món
 /// Lịch sử giá bán theo ngày áp dụng; đơn hàng lấy giá có hiệu lực tại ngày bán.
-/// Lưu: loại giá (tại quán / app), giá, áp dụng từ ngày, người đổi.
+/// Lưu: loại giá (tại quán / app), app riêng (trống = mọi app), giá, áp dụng từ ngày, người đổi.
 model DishPrice {
   id            Int       @id @default(autoincrement())
   dishId        Int       @map("dish_id")
   priceType     PriceType @map("price_type")
+  /// Only for APP prices: the delivery app this price is for; null = every app without its own price.
+  deliveryAppId Int?      @map("delivery_app_id")
   price         Decimal   @db.Decimal(16, 2)
   effectiveFrom DateTime  @map("effective_from") @db.Date
   createdById   Int?      @map("created_by")
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  dish Dish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  dish        Dish         @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  deliveryApp DeliveryApp? @relation(fields: [deliveryAppId], references: [id], onDelete: Cascade)
 
-  @@unique([dishId, priceType, effectiveFrom])
+  /// NULLS NOT DISTINCT (set in the migration): one general price per dish, type and day.
+  @@unique([dishId, priceType, deliveryAppId, effectiveFrom])
   @@map("dish_prices")
 }
 
@@ -318,7 +322,8 @@ model DeliveryApp {
   commissionPct Decimal @map("commission_pct") @db.Decimal(5, 2)
   active        Boolean @default(true)
 
-  orders Order[]
+  orders     Order[]
+  dishPrices DishPrice[]
 
   @@map("delivery_apps")
 }

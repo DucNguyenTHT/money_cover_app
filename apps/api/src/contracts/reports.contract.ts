@@ -263,6 +263,8 @@ export const dashboardSchema = z.object({
     cancelledToday: z.number(),
     belowCostToday: z.number(),
     unclosedDays: z.number(),
+    /** Orders still open from an earlier business day (that day cannot be closed). */
+    staleOpenOrders: z.number(),
     lockedPins: z.number(),
   }),
   /** Household tax threshold watch (null for a company). */

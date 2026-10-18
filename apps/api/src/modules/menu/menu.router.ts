@@ -54,6 +54,7 @@ export const menuRouter = s.router(menuContract, {
 export const pricingRouter = s.router(pricingContract, {
   list: async ({ query }) => ({ status: 200, body: await pricing.list(query.appId) }),
   detail: async ({ params, query }) => ({ status: 200, body: await pricing.detail(params.id, query.appId) }),
+  overhead: async () => ({ status: 200, body: await pricing.overheadPct() }),
   alerts: async () => ({ status: 200, body: await pricing.alerts() }),
 });
 

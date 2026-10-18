@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Bike, ShoppingBag, UtensilsCrossed } from 'lucide-react';
+import { AlertTriangle, Bike, ShoppingBag, UtensilsCrossed } from 'lucide-react';
 import type { OrderSummary } from '@ketoan/api/contracts';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { Segmented } from '@/components/ui/controls';
-import { money } from '@/lib/format';
+import { dateVi, money } from '@/lib/format';
+import { useBusinessToday } from '@/lib/business-date';
 import { cn } from '@/lib/cn';
 import { usePos } from '@/pos/context';
 import { minutesSince, useDeliveryApps, useFloor, whereLabel } from '@/pos/data';
@@ -40,6 +41,7 @@ export function TableMapPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [areaId, setAreaId] = useState<number | null>(null);
   const [appOpen, setAppOpen] = useState(false);
+  const bizToday = useBusinessToday();
 
   const areas = floor.data?.areas ?? [];
   const others = floor.data?.others ?? [];
@@ -73,6 +75,16 @@ export function TableMapPage() {
           appOrderCode: null,
         },
       });
+    go();
+  };
+
+  // Orders left open from an earlier business day block that day's cash closing.
+  const stale = [...allTables.flatMap((t) => t.orders), ...others].filter((o) => o.businessDate < bizToday);
+  const openStale = () => {
+    const o = stale[0]!;
+    const area = areas.find((a) => a.tables.some((t) => t.orders.some((x) => x.id === o.id)));
+    setAreaId(area?.id ?? OTHERS);
+    setTarget({ orderId: o.id });
     go();
   };
 
@@ -119,6 +131,16 @@ export function TableMapPage() {
             Gọi món
           </Button>
         </div>
+        {stale.length > 0 && (
+          <button
+            onClick={openStale}
+            className="flex items-center gap-2 border-b border-line bg-warn-soft px-3.5 py-2 text-left text-[13px] text-warn hover:underline"
+          >
+            <AlertTriangle size={16} className="shrink-0" />
+            {stale.length} đơn còn mở từ ngày trước ({stale.map((o) => dateVi(o.businessDate)).join(', ')}) —
+            thanh toán hoặc huỷ để chốt được ngày đó
+          </button>
+        )}
         <div
           role="tablist"
           aria-label="Khu vực"

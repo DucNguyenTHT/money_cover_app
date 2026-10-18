@@ -38,6 +38,7 @@ export function OrderPage() {
   const orderId = target && 'orderId' in target ? target.orderId : null;
   const order = useOrder(orderId).data;
   const channel = order?.channel ?? (target && 'draft' in target ? target.draft.channel : 'DINE_IN');
+  const appId = order?.deliveryAppId ?? (target && 'draft' in target ? target.draft.deliveryAppId : null);
   const menu = useMenu(channel);
   const [cat, setCat] = useState<number | null>(null);
   const [showPanel, setShowPanel] = useState(false);
@@ -147,7 +148,7 @@ export function OrderPage() {
                   colors={TILES[i % 4]!}
                   onAdd={() => addDish(d.id)}
                   onLongPress={() => toggleSoldOut(d)}
-                  channelApp={channel === 'APP'}
+                  appId={channel === 'APP' ? (appId ?? null) : undefined}
                 />
               ))}
               {menu.isSuccess && shown.length === 0 && (
@@ -227,18 +228,22 @@ function DishTile({
   colors,
   onAdd,
   onLongPress,
-  channelApp,
+  appId,
 }: {
   dish: DishDto;
   qty: number;
   colors: readonly [string, string];
   onAdd: () => void;
   onLongPress: () => void;
-  channelApp: boolean;
+  /** Set for an app order (null = app not chosen yet): price the tile for that app. */
+  appId?: number | null;
 }) {
   const timer = useRef<number | null>(null);
   const long = useRef(false);
-  const price = channelApp ? dish.appPrice : dish.storePrice;
+  const price =
+    appId === undefined
+      ? dish.storePrice
+      : (dish.appPrices.find((p) => p.deliveryAppId === appId)?.price ?? dish.appPrice);
   const start = () => {
     long.current = false;
     timer.current = window.setTimeout(() => {

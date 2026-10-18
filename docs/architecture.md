@@ -52,11 +52,11 @@ api: modules ──► contracts, domain, core
 
 ## Kiểm thử
 
-| Tầng              | Lệnh        | Ghi chú                                                                                               |
-| ----------------- | ----------- | ----------------------------------------------------------------------------------------------------- |
-| Unit (domain)     | `pnpm test` | nhanh, nhiều nhất                                                                                     |
-| Integration (api) | `pnpm test` | server cổng ngẫu nhiên + DB `ketoan_test`, TRUNCATE trước mỗi test, chạy tuần tự                      |
-| E2E (Playwright)  | `pnpm e2e`  | cần app đang chạy và `E2E_USER` / `E2E_PASS` (ADMIN); tự tạo dữ liệu mã duy nhất → dùng DB bỏ đi được |
+| Tầng              | Lệnh        | Ghi chú                                                                                                                                                             |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit (domain)     | `pnpm test` | nhanh, nhiều nhất                                                                                                                                                   |
+| Integration (api) | `pnpm test` | server cổng ngẫu nhiên + DB `ketoan_test`, TRUNCATE trước mỗi test, chạy tuần tự                                                                                    |
+| E2E (Playwright)  | `pnpm e2e`  | tự dựng API :4100 + web :5273 trên DB `ketoan_e2e` (xoá và tạo lại mỗi lần chạy) — không đụng DB dev. Chạy vào app có sẵn: đặt `BASE_URL` + `E2E_USER` / `E2E_PASS` |
 
 Các spec e2e: `pos-order-flow` (bán → bếp → thanh toán → huỷ), `inventory-flow` (kiểm kê → phân bổ → huỷ),
 `a11y` (quét axe WCAG A/AA 14 màn chính, lỗi nghiêm trọng là trượt), `onboarding` (cài mới từ đầu → nhập Excel → bán → lãi lỗ).

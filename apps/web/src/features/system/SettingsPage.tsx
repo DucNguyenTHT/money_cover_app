@@ -10,6 +10,7 @@ import { Field, Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok } from '@/lib/api-client';
+import { cn } from '@/lib/cn';
 
 type Branch = { name: string; address: string; phone: string };
 const CHANNEL_LABEL: Record<Channel, string> = {
@@ -32,6 +33,11 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const query = useQuery({ queryKey: ['settings'], queryFn: async () => ok(await client.settings.get()) });
+  // Rate the pricing pages actually use (automatic, or the manual fallback) and why.
+  const overhead = useQuery({
+    queryKey: ['pricing', 'overhead'],
+    queryFn: async () => ok(await client.pricing.overhead()),
+  });
   const [branch, setBranch] = useState<Branch | null>(null);
   const [s, setS] = useState<Settings | null>(null);
 
@@ -46,6 +52,7 @@ export function SettingsPage() {
     mutationFn: async () => ok(await client.settings.update({ body: { branch: branch!, settings: s! } })),
     onSuccess: (data) => {
       qc.setQueryData(['settings'], data);
+      qc.invalidateQueries({ queryKey: ['pricing'] });
       toast('Đã lưu cài đặt');
     },
   });
@@ -298,9 +305,23 @@ export function SettingsPage() {
                 { value: 'MANUAL', label: 'Nhập tay' },
               ]}
             />
+            {overhead.data && (
+              <p className={cn('text-xs', overhead.data.warn ? 'text-warn' : 'text-faint')}>
+                Đang dùng {overhead.data.pct.replace('.', ',')}%
+                {overhead.data.source === 'MANUAL' ? ' (nhập tay)' : ' (tự tính)'}
+                {overhead.data.note ? ` · ${overhead.data.note}` : ''}
+              </p>
+            )}
           </div>
-          {s.overhead_rate_mode === 'MANUAL' && (
-            <Field label="Chi phí chung (% doanh số)">
+          {/* The manual rate is also the fallback of the automatic one. */}
+          {(s.overhead_rate_mode === 'MANUAL' || overhead.data?.source === 'MANUAL') && (
+            <Field
+              label={
+                s.overhead_rate_mode === 'MANUAL'
+                  ? 'Chi phí chung (% doanh số)'
+                  : 'Chi phí chung dự phòng (% doanh số)'
+              }
+            >
               {(id) => (
                 <Input
                   id={id}

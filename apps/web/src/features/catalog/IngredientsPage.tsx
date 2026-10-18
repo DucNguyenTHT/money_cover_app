@@ -167,6 +167,8 @@ function IngredientForm({
         },
   });
   const v = watch();
+  // Stock and recipes are stored in these units: they cannot change once used.
+  const locked = !!item?.unitsLocked;
 
   const save = useMutation({
     mutationFn: async (f: FormValues) => {
@@ -216,15 +218,27 @@ function IngredientForm({
 
         <fieldset className="grid gap-3 rounded-card border border-line p-3 sm:col-span-2 sm:grid-cols-3">
           <legend className="px-1 text-[13px] font-semibold text-ink-strong">Đơn vị</legend>
+          {locked && (
+            <p className="text-xs text-muted sm:col-span-3">
+              Đã có tồn kho hoặc định mức nên không đổi được đơn vị kho, đơn vị định mức và hệ số quy đổi. Cần
+              đơn vị khác thì tạo nguyên liệu mới.
+            </p>
+          )}
           <Field label="Đơn vị kho" hint="Đơn vị tồn kho & giá vốn">
-            {(id, d) => <Input id={id} aria-describedby={d} {...register('unit')} />}
+            {(id, d) => <Input id={id} aria-describedby={d} readOnly={locked} {...register('unit')} />}
           </Field>
           <Field label="Đơn vị định mức" hint="Dùng khi khai báo món">
-            {(id, d) => <Input id={id} aria-describedby={d} {...register('recipeUnit')} />}
+            {(id, d) => <Input id={id} aria-describedby={d} readOnly={locked} {...register('recipeUnit')} />}
           </Field>
           <Field label={`1 ${v.unit || '…'} = ? ${v.recipeUnit || '…'}`}>
             {(id) => (
-              <Input id={id} inputMode="decimal" className="num text-right" {...register('recipeFactor')} />
+              <Input
+                id={id}
+                inputMode="decimal"
+                className="num text-right"
+                readOnly={locked}
+                {...register('recipeFactor')}
+              />
             )}
           </Field>
           <Field label="Đơn vị mua (tuỳ chọn)" hint="VD: thùng, bao">

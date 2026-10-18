@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
@@ -87,18 +87,24 @@ export function CostSheetPage() {
     const base = Number.isNaN(parseMoney(tryStore))
       ? (row.channels.DINE_IN.price ?? store?.toString())
       : String(parseMoney(tryStore));
-    const app = base
-      ? suggestAppPrice({
-          storePrice: base,
-          storeDirect: row.channels.DINE_IN.directCost,
-          appDirect: row.channels.APP.directCost,
-          overheadPct: ctx.overheadPct,
-          commissionPct: commission,
-          step: 1000,
-        })
-      : null;
-    return { store: store?.toString() ?? null, app: app?.toString() ?? null, target: t };
-  }, [row, ctx, target, tryStore, commission]);
+    // Each app keeps the store's profit per portion after its own commission.
+    const apps = row.apps.map((a) => ({
+      id: a.deliveryAppId,
+      name: a.name,
+      commissionPct: a.commissionPct,
+      price: base
+        ? (suggestAppPrice({
+            storePrice: base,
+            storeDirect: row.channels.DINE_IN.directCost,
+            appDirect: row.channels.APP.directCost,
+            overheadPct: ctx.overheadPct,
+            commissionPct: a.commissionPct,
+            step: 1000,
+          })?.toString() ?? null)
+        : null,
+    }));
+    return { store: store?.toString() ?? null, apps, target: t };
+  }, [row, ctx, target, tryStore]);
 
   const rows: { label: string; key: keyof ChannelCostDto; strong?: boolean; neg?: boolean; pct?: boolean }[] =
     [
@@ -144,7 +150,7 @@ export function CostSheetPage() {
             </Select>
           )}
         </Field>
-        <Field label="Tính chiết khấu theo app">
+        <Field label="App ở cột app">
           {(id) => (
             <Select
               id={id}
@@ -183,6 +189,23 @@ export function CostSheetPage() {
       ) : (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col gap-4">
+            {ctx?.overheadNote && (
+              <p
+                className={cn(
+                  'flex items-start gap-2 rounded-ctl px-3 py-2 text-[13px]',
+                  ctx.overheadWarn ? 'bg-warn-soft text-warn' : 'bg-primary-soft text-primary-ink',
+                )}
+              >
+                {ctx.overheadWarn && <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
+                <span>
+                  Chi phí chung {ctx.overheadPct.replace('.', ',')}% giá bán
+                  {ctx.overheadMode === 'MANUAL' ? ' (nhập tay)' : ' (tự tính)'}: {ctx.overheadNote}{' '}
+                  <Link className="underline" to="/admin/system/settings">
+                    Cài đặt
+                  </Link>
+                </span>
+              </p>
+            )}
             {row.missingPrices.length > 0 && (
               <p className="flex items-center gap-2 rounded-ctl bg-warn-soft px-3 py-2 text-[13px] text-warn">
                 <AlertTriangle size={16} /> Chưa có giá nhập cho: {row.missingPrices.join(', ')} — giá vốn
@@ -202,7 +225,7 @@ export function CostSheetPage() {
                       <th className="px-4 py-2.5 text-left font-semibold">1 phần</th>
                       {CH.map((c) => (
                         <th key={c.key} className="px-4 py-2.5 text-right font-semibold">
-                          {c.label}
+                          {c.key === 'APP' && ctx?.app ? ctx.app.name : c.label}
                         </th>
                       ))}
                     </tr>
@@ -230,6 +253,60 @@ export function CostSheetPage() {
                 </table>
               </div>
             </Card>
+            {row.apps.length > 0 && (
+              <Card>
+                <h2 className="border-b border-line px-4 py-3 font-semibold text-ink-strong">
+                  Giá & lãi theo từng app
+                </h2>
+                <DataTable
+                  rows={row.apps}
+                  rowKey={(a) => a.deliveryAppId}
+                  columns={[
+                    {
+                      key: 'name',
+                      header: 'App',
+                      cell: (a) => (
+                        <span>
+                          {a.name} <span className="text-faint">· phí sàn {Number(a.commissionPct)}%</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'price',
+                      header: 'Giá bán',
+                      align: 'right',
+                      cell: (a) => (
+                        <span className="num">
+                          {a.price ? money(a.price) : '—'} {!a.ownPrice && <Badge>Giá chung</Badge>}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'profit',
+                      header: 'Lãi / phần',
+                      align: 'right',
+                      cell: (a) =>
+                        a.profit == null ? (
+                          '—'
+                        ) : (
+                          <b className={cn('num', Number(a.profit) < 0 && 'text-bad')}>
+                            {money(a.profit)} {a.loss && <Badge tone="bad">Lỗ</Badge>}
+                          </b>
+                        ),
+                    },
+                    {
+                      key: 'sugg',
+                      header: 'Giá gợi ý',
+                      align: 'right',
+                      secondary: true,
+                      cell: (a) => (
+                        <span className="num">{a.suggestedPrice ? money(a.suggestedPrice) : '—'}</span>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+            )}
             <Card>
               <h2 className="border-b border-line px-4 py-3 font-semibold text-ink-strong">
                 Định mức đang dùng
@@ -296,7 +373,7 @@ export function CostSheetPage() {
                     />
                   )}
                 </Field>
-                <Field label="Giá trên app">
+                <Field label={`Giá trên ${ctx?.app?.name ?? 'app'}`}>
                   {(id) => (
                     <Input
                       id={id}
@@ -324,13 +401,22 @@ export function CostSheetPage() {
                   />
                 )}
               </Field>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <dl className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 text-sm">
                 <dt className="text-muted">Tại quán</dt>
                 <dd className="text-right text-lg font-bold num">{sugg?.store ? money(sugg.store) : '—'}</dd>
-                <dt className="text-muted">App (giữ lãi / phần)</dt>
-                <dd className="text-right text-lg font-bold num">{sugg?.app ? money(sugg.app) : '—'}</dd>
+                {sugg?.apps.map((a) => (
+                  <Fragment key={a.id}>
+                    <dt className="truncate text-muted">
+                      {a.name} ({Number(a.commissionPct)}%)
+                    </dt>
+                    <dd className="text-right text-lg font-bold num">{a.price ? money(a.price) : '—'}</dd>
+                  </Fragment>
+                ))}
               </dl>
-              <ApplyPrices dishId={row.dishId} store={sugg?.store ?? null} app={sugg?.app ?? null} />
+              {!!sugg?.apps.length && (
+                <p className="mt-1 text-xs text-faint">Giá app giữ nguyên lãi / phần như bán tại quán.</p>
+              )}
+              <ApplyPrices dishId={row.dishId} store={sugg?.store ?? null} apps={sugg?.apps ?? []} />
             </Card>
           </div>
         </div>
@@ -339,28 +425,42 @@ export function CostSheetPage() {
   );
 }
 
-function ApplyPrices({ dishId, store, app }: { dishId: number; store: string | null; app: string | null }) {
+type AppSuggestion = { id: number; price: string | null };
+
+/** Save the suggested store price and each app's suggested price as that app's own price. */
+async function applySuggested(dishId: number, store: string | null, apps: AppSuggestion[], from: string) {
+  if (store)
+    ok(
+      await client.menu.setPrice({
+        params: { id: dishId },
+        body: { priceType: 'STORE', price: store, effectiveFrom: from },
+      }),
+    );
+  for (const a of apps)
+    if (a.price)
+      ok(
+        await client.menu.setPrice({
+          params: { id: dishId },
+          body: { priceType: 'APP', deliveryAppId: a.id, price: a.price, effectiveFrom: from },
+        }),
+      );
+}
+
+function ApplyPrices({
+  dishId,
+  store,
+  apps,
+}: {
+  dishId: number;
+  store: string | null;
+  apps: AppSuggestion[];
+}) {
   const qc = useQueryClient();
   const toast = useToast();
   const bizToday = useBusinessToday();
   const [from, setFrom] = useState(bizToday);
   const apply = useMutation({
-    mutationFn: async () => {
-      if (store)
-        ok(
-          await client.menu.setPrice({
-            params: { id: dishId },
-            body: { priceType: 'STORE', price: store, effectiveFrom: from },
-          }),
-        );
-      if (app)
-        ok(
-          await client.menu.setPrice({
-            params: { id: dishId },
-            body: { priceType: 'APP', price: app, effectiveFrom: from },
-          }),
-        );
-    },
+    mutationFn: () => applySuggested(dishId, store, apps, from),
     onSuccess: () => {
       toast('Đã áp dụng giá gợi ý');
       qc.invalidateQueries({ queryKey: ['pricing'] });
@@ -377,7 +477,7 @@ function ApplyPrices({ dishId, store, app }: { dishId: number; store: string | n
       <Button
         variant="primary"
         loading={apply.isPending}
-        disabled={!store && !app}
+        disabled={!store && !apps.some((a) => a.price)}
         onClick={() => apply.mutate()}
       >
         Áp dụng giá gợi ý
@@ -402,22 +502,13 @@ export function PriceAlertsPage() {
   // Apply the suggested store (and app) price of every ticked dish from one date. Each price is audited server-side.
   const applyMany = useMutation({
     mutationFn: async () => {
-      for (const r of rows.filter((x) => picked.includes(x.dishId))) {
-        if (r.suggestedStorePrice)
-          ok(
-            await client.menu.setPrice({
-              params: { id: r.dishId },
-              body: { priceType: 'STORE', price: r.suggestedStorePrice, effectiveFrom: from },
-            }),
-          );
-        if (r.suggestedAppPrice)
-          ok(
-            await client.menu.setPrice({
-              params: { id: r.dishId },
-              body: { priceType: 'APP', price: r.suggestedAppPrice, effectiveFrom: from },
-            }),
-          );
-      }
+      for (const r of rows.filter((x) => picked.includes(x.dishId)))
+        await applySuggested(
+          r.dishId,
+          r.suggestedStorePrice,
+          r.apps.map((a) => ({ id: a.deliveryAppId, price: a.suggestedPrice })),
+          from,
+        );
     },
     onSuccess: () => {
       toast(`Đã áp dụng giá mới cho ${picked.length} món từ ${from.split('-').reverse().join('/')}`);
@@ -532,7 +623,7 @@ export function PriceAlertsPage() {
                 <b className="num">{r.suggestedStorePrice ? money(r.suggestedStorePrice) : '—'}</b>
               ),
             },
-            ...(rows.some((r) => r.suggestedAppPrice)
+            ...(rows.some((r) => r.apps.some((a) => a.suggestedPrice))
               ? [
                   {
                     key: 'app',
@@ -540,7 +631,13 @@ export function PriceAlertsPage() {
                     align: 'right' as const,
                     secondary: true,
                     cell: (r: PricingRow) => (
-                      <span className="num">{r.suggestedAppPrice ? money(r.suggestedAppPrice) : '—'}</span>
+                      <span className="flex flex-col items-end text-[13px]">
+                        {r.apps.map((a) => (
+                          <span key={a.deliveryAppId} className={cn('num', a.loss && 'text-bad')}>
+                            {a.name} {a.suggestedPrice ? money(a.suggestedPrice) : '—'}
+                          </span>
+                        ))}
+                      </span>
                     ),
                   },
                 ]

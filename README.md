@@ -35,13 +35,13 @@ Mở http://localhost:5173, đăng nhập `admin` bằng mật khẩu tạm in r
 
 ## Lệnh thường dùng
 
-| Lệnh                                                                      | Việc                                                                    |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `pnpm test`                                                               | unit test (domain) + integration test (api, DB test)                    |
-| `pnpm e2e`                                                                | Playwright — cần app đang chạy và `E2E_USER` / `E2E_PASS` của một ADMIN |
-| `pnpm lint` / `pnpm typecheck` / `pnpm build`                             | kiểm tra & build                                                        |
-| `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:reset` | quản lý DB                                                              |
-| `pnpm --filter @ketoan/api db:reset-admin`                                | quên mật khẩu `admin`: in mật khẩu tạm mới (phải đổi khi đăng nhập)     |
+| Lệnh                                                                      | Việc                                                                                                                               |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm test`                                                               | unit test (domain) + integration test (api, DB test)                                                                               |
+| `pnpm e2e`                                                                | Playwright — tự chạy app riêng trên DB `ketoan_e2e` (không đụng DB dev); vào app có sẵn thì đặt `BASE_URL`, `E2E_USER`, `E2E_PASS` |
+| `pnpm lint` / `pnpm typecheck` / `pnpm build`                             | kiểm tra & build                                                                                                                   |
+| `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:reset` | quản lý DB                                                                                                                         |
+| `pnpm --filter @ketoan/api db:reset-admin`                                | quên mật khẩu `admin`: in mật khẩu tạm mới (phải đổi khi đăng nhập)                                                                |
 
 Commit chạy `lint-staged` (eslint + prettier) qua husky. CI (`.github/workflows/ci.yml`) chạy lint, typecheck, test, build và e2e.
 

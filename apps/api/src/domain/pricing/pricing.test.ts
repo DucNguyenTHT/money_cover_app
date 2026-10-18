@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { costSheet, overheadRate, priceAlert, suggestAppPrice, suggestStorePrice } from './pricing';
+import {
+  chooseOverheadRate,
+  costSheet,
+  overheadRate,
+  priceAlert,
+  suggestAppPrice,
+  suggestStorePrice,
+} from './pricing';
 import { consumption, pickVersion, recipeToStock } from '../recipes/recipes';
 
 // Phở: 0,2 kg thịt @120.000 + 0,2 kg bánh @20.000 = 28.000; takeaway/app box 2.000
@@ -55,6 +62,42 @@ describe('suggestions', () => {
   it('overhead rate from recent months', () => {
     expect(overheadRate(30_000_000, 300_000_000)!.toNumber()).toBe(10);
     expect(overheadRate(1, 0)).toBeNull();
+  });
+});
+
+describe('chooseOverheadRate', () => {
+  const months = [
+    { month: '2026-07', overhead: 30_000_000, revenue: 0 },
+    { month: '2026-08', overhead: 30_000_000, revenue: 15_000_000 }, // opened 25/8: 6 days of sales
+    { month: '2026-09', overhead: 30_000_000, revenue: 300_000_000 },
+  ];
+  const base = { mode: 'AUTO' as const, manualPct: 12 };
+
+  it('uses only the months sold in full (not the opening month)', () => {
+    const r = chooseOverheadRate({ ...base, firstSale: '2026-08-25', months });
+    expect(r).toMatchObject({ pct: '10', source: 'AUTO', months: ['2026-09'], warn: false });
+    expect(r.note).toBe('Tính từ tháng 9/2026.');
+  });
+
+  it('falls back to the manual rate with no full month', () => {
+    const r = chooseOverheadRate({ ...base, firstSale: '2026-09-10', months });
+    expect(r).toMatchObject({ pct: '12', source: 'MANUAL', warn: false });
+    expect(r.note).toContain('Chưa có tháng nào bán trọn vẹn');
+  });
+
+  it('falls back and warns when overhead is above sales', () => {
+    const r = chooseOverheadRate({
+      ...base,
+      firstSale: '2026-01-01',
+      months: [{ month: '2026-09', overhead: 60_000_000, revenue: 29_000_000 }],
+    });
+    expect(r).toMatchObject({ pct: '12', source: 'MANUAL', warn: true });
+    expect(r.note).toContain('Tỷ lệ tự tính ra 206,9%');
+  });
+
+  it('warns about a manual rate above 100 %', () => {
+    const r = chooseOverheadRate({ mode: 'MANUAL', manualPct: 150, firstSale: null, months: [] });
+    expect(r).toMatchObject({ pct: '150', source: 'MANUAL', warn: true });
   });
 });
 

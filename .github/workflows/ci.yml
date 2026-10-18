@@ -54,6 +54,7 @@ jobs:
       - run: pnpm --filter @ketoan/e2e exec playwright install --with-deps chromium
       - run: pnpm e2e
         env:
+          BASE_URL: http://localhost:5173
           E2E_USER: e2e_admin
           E2E_PASS: ci-e2e-pass-2026
       - if: failure()

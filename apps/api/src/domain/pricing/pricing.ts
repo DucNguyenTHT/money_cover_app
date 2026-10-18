@@ -112,6 +112,86 @@ export function overheadRate(overheadTotal: Num, revenueTotal: Num): Decimal | n
   return r.lte(0) ? null : D(overheadTotal).div(r).mul(100).toDecimalPlaces(2);
 }
 
+export interface OverheadMonth {
+  /** "YYYY-MM" */
+  month: string;
+  overhead: Num;
+  revenue: Num;
+}
+
+export interface OverheadChoice {
+  /** Rate used for pricing, % of the selling price. */
+  pct: string;
+  /** Where the rate comes from: computed from recent months, or the manual value in Settings. */
+  source: 'AUTO' | 'MANUAL';
+  /** Months the automatic rate was computed from. */
+  months: string[];
+  /** What the owner should know about the rate (fallback reason, months used…). */
+  note: string | null;
+  /** The rate is suspicious (above 100 % of sales) and prices built on it are not reliable. */
+  warn: boolean;
+}
+
+const pctVi = (v: Decimal.Value) => `${D(v).toDecimalPlaces(2).toString().replace('.', ',')}%`;
+const monthsVi = (ms: string[]) => {
+  const year = ms[0]!.slice(0, 4);
+  return ms.every((m) => m.startsWith(year))
+    ? `tháng ${ms.map((m) => Number(m.slice(5))).join(', ')}/${year}`
+    : ms.map((m) => `${Number(m.slice(5))}/${m.slice(0, 4)}`).join(', ');
+};
+
+/**
+ * Overhead rate for pricing. AUTO = overhead ÷ revenue of the recent months the shop sold for the WHOLE month
+ * (a part-month after opening still carries a full month of rent and wages and would inflate the rate). With no
+ * full month, or a rate above 100 % of sales, the manual rate is used instead and the note says why.
+ */
+export function chooseOverheadRate(args: {
+  mode: 'AUTO' | 'MANUAL';
+  manualPct: Num;
+  /** First business date with a paid sale (null = nothing sold yet). */
+  firstSale: string | null;
+  /** Candidate months, oldest first. */
+  months: readonly OverheadMonth[];
+}): OverheadChoice {
+  const manual = D(args.manualPct);
+  const manualWarn = manual.gt(100);
+  const useManual = (note: string | null, warn = false): OverheadChoice => ({
+    pct: manual.toString(),
+    source: 'MANUAL',
+    months: [],
+    note:
+      [note, manualWarn ? `Tỷ lệ nhập tay ${pctVi(manual)} lớn hơn 100% doanh số — kiểm tra lại.` : null]
+        .filter(Boolean)
+        .join(' ') || null,
+    warn: warn || manualWarn,
+  });
+  if (args.mode === 'MANUAL') return useManual(null);
+
+  const full = args.months.filter(
+    (m) => args.firstSale !== null && args.firstSale <= `${m.month}-01` && D(m.revenue).gt(0),
+  );
+  if (!full.length)
+    return useManual(
+      `Chưa có tháng nào bán trọn vẹn trong ${args.months.length} tháng gần nhất nên đang dùng tỷ lệ nhập tay ${pctVi(manual)}.`,
+    );
+  const overhead = full.reduce((s, m) => s.add(m.overhead), ZERO);
+  const revenue = full.reduce((s, m) => s.add(m.revenue), ZERO);
+  const rate = overheadRate(overhead, revenue)!;
+  const used = full.map((m) => m.month);
+  if (rate.gt(100))
+    return useManual(
+      `Tỷ lệ tự tính ra ${pctVi(rate)} (chi phí chung ${monthsVi(used)} lớn hơn doanh thu) nên đang dùng tỷ lệ nhập tay ${pctVi(manual)}. Kiểm tra lại chi phí chung đã nhập.`,
+      true,
+    );
+  return {
+    pct: rate.toString(),
+    source: 'AUTO',
+    months: used,
+    note: `Tính từ ${monthsVi(used)}.`,
+    warn: false,
+  };
+}
+
 export type PriceAlertLevel = 'LOSS' | 'OVER_TARGET' | null;
 
 /** LOSS when selling at or below direct cost (+ commission for apps); OVER_TARGET when food cost exceeds target + tolerance. */

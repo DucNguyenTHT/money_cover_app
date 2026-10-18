@@ -8,6 +8,7 @@ import { emit } from '../../core/realtime';
 import { socketRooms } from '../../contracts/socket-events';
 import { fromDbDate, toDbDate } from '../../domain/business-date';
 import { pickVersion, recipeToStock, stockToRecipe } from '../../domain/recipes/recipes';
+import { ownAppPrices, priceInForce, sellingPrice, type PriceEntry } from '../../domain/pricing/price-list';
 import type {
   categoryInput,
   DishDetail,
@@ -27,13 +28,23 @@ const dishInclude = {
 } as const;
 type DishRow = Prisma.DishGetPayload<{ include: typeof dishInclude }>;
 
-/** Price of `type` in force on `date` (prices sorted newest first). */
-function priceOn(prices: DishRow['prices'], type: PriceType, date: string) {
-  const p = prices.find((x) => x.priceType === type && fromDbDate(x.effectiveFrom) <= date);
-  return p ? p.price.toString() : null;
-}
+export const priceEntries = (
+  prices: {
+    priceType: PriceType;
+    deliveryAppId: number | null;
+    effectiveFrom: Date;
+    price: Prisma.Decimal;
+  }[],
+): PriceEntry[] =>
+  prices.map((p) => ({
+    priceType: p.priceType,
+    deliveryAppId: p.deliveryAppId,
+    effectiveFrom: fromDbDate(p.effectiveFrom),
+    price: p.price.toString(),
+  }));
 
 function toDish(d: DishRow, date: string, today: string): DishDto {
+  const prices = priceEntries(d.prices);
   const versions = d.recipes.map((r) => ({ effectiveFrom: fromDbDate(r.effectiveFrom), r }));
   return {
     id: d.id,
@@ -44,8 +55,9 @@ function toDish(d: DishRow, date: string, today: string): DishDto {
     station: d.category.station,
     active: d.active,
     sort: d.sort,
-    storePrice: priceOn(d.prices, 'STORE', date),
-    appPrice: priceOn(d.prices, 'APP', date) ?? priceOn(d.prices, 'STORE', date),
+    storePrice: priceInForce(prices, 'STORE', null, date),
+    appPrice: sellingPrice(prices, 'APP', null, date),
+    appPrices: ownAppPrices(prices, date),
     soldOut: !!d.soldOutDate && fromDbDate(d.soldOutDate) === today,
     hasRecipe: !!pickVersion(versions, date),
   };
@@ -57,6 +69,7 @@ function toDetail(d: DishRow, date: string, today: string): DishDetail {
     prices: d.prices.map((p) => ({
       id: p.id,
       priceType: p.priceType,
+      deliveryAppId: p.deliveryAppId,
       price: p.price.toString(),
       effectiveFrom: fromDbDate(p.effectiveFrom),
     })),
@@ -160,33 +173,53 @@ export async function updateDish(userId: number, id: number, input: z.infer<type
   return getDish(id);
 }
 
+const viDate = (d: string) => d.split('-').reverse().join('/');
+
+/**
+ * A price or recipe dated in the past would claim that orders already sold since then used it, while they
+ * keep the price / recipe they were sold with. Allowed only while the dish has no sale on or after that date.
+ */
+async function assertNotBeforeSales(db: Db, dishId: number, from: string, what: string) {
+  const today = await businessToday(db);
+  if (from >= today) return;
+  const sold = await db.orderItem.findFirst({
+    where: { dishId, order: { businessDate: { gte: toDbDate(from) } } },
+    select: { order: { select: { businessDate: true } } },
+    orderBy: { order: { businessDate: 'asc' } },
+  });
+  if (sold)
+    throw conflict(
+      'BACKDATED',
+      `Món đã có đơn bán ngày ${viDate(fromDbDate(sold.order.businessDate))}, sau ngày ${viDate(from)} — ${what} chỉ áp dụng được từ hôm nay (${viDate(today)}) trở đi`,
+    );
+}
+
 export async function setPrice(
   userId: number,
   dishId: number,
-  input: { priceType: PriceType; price: string; effectiveFrom: string },
+  input: { priceType: PriceType; deliveryAppId: number | null; price: string; effectiveFrom: string },
 ) {
   await getDish(dishId);
+  const deliveryAppId = input.priceType === 'APP' ? input.deliveryAppId : null;
+  if (deliveryAppId !== null && !(await prisma.deliveryApp.findUnique({ where: { id: deliveryAppId } })))
+    throw badRequest('App giao hàng không tồn tại');
   await inTx(async (tx) => {
     await assertPeriodOpen(tx, input.effectiveFrom);
+    await assertNotBeforeSales(tx, dishId, input.effectiveFrom, 'giá mới');
+    // Not an upsert: Prisma cannot address a compound unique key with a null app.
     const key = {
-      dishId_priceType_effectiveFrom: {
-        dishId,
-        priceType: input.priceType,
-        effectiveFrom: toDbDate(input.effectiveFrom),
-      },
+      dishId,
+      priceType: input.priceType,
+      deliveryAppId,
+      effectiveFrom: toDbDate(input.effectiveFrom),
     };
-    const before = await tx.dishPrice.findUnique({ where: key });
-    await tx.dishPrice.upsert({
-      where: key,
-      update: { price: input.price, createdById: userId },
-      create: {
-        dishId,
-        priceType: input.priceType,
-        price: input.price,
-        effectiveFrom: toDbDate(input.effectiveFrom),
-        createdById: userId,
-      },
-    });
+    const before = await tx.dishPrice.findFirst({ where: key });
+    if (before)
+      await tx.dishPrice.update({
+        where: { id: before.id },
+        data: { price: input.price, createdById: userId },
+      });
+    else await tx.dishPrice.create({ data: { ...key, price: input.price, createdById: userId } });
     await writeAudit(tx, {
       entity: 'dish_price',
       entityId: dishId,
@@ -210,6 +243,7 @@ export async function saveRecipe(userId: number, dishId: number, input: z.infer<
 
   await inTx(async (tx) => {
     await assertPeriodOpen(tx, input.effectiveFrom);
+    await assertNotBeforeSales(tx, dishId, input.effectiveFrom, 'định mức mới');
     const existing = await tx.dishRecipe.findUnique({
       where: { dishId_effectiveFrom: { dishId, effectiveFrom: toDbDate(input.effectiveFrom) } },
       include: { _count: { select: { orderItems: true } }, items: true },
