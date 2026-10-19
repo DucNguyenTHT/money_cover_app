@@ -15,6 +15,7 @@ import { stocktakeContract } from './stocktake.contract';
 import { reportsContract } from './reports.contract';
 import { documentsContract } from './documents.contract';
 import { driveContract } from './drive.contract';
+import { backupsContract } from './backups.contract';
 
 const c = initContract();
 
@@ -36,6 +37,7 @@ export const api = c.router({
   reports: reportsContract,
   documents: documentsContract,
   drive: driveContract,
+  backups: backupsContract,
 });
 
 export type Api = typeof api;
@@ -55,3 +57,4 @@ export * from './stocktake.contract';
 export * from './reports.contract';
 export * from './documents.contract';
 export * from './drive.contract';
+export * from './backups.contract';

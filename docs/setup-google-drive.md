@@ -4,6 +4,10 @@ Tính năng **Chứng từ → Sao lưu / Google Drive** nén ảnh / file chứ
 file `.zip` và tải lên Google Drive của chủ quán. Mỗi lần gửi tạo **một file mới** có ghi ngày giờ trong tên,
 nên không bao giờ ghi đè bản cũ. File nằm trong thư mục `Kế toán quán - Chứng từ`.
 
+Sau khi kết nối, **bản sao lưu dữ liệu hằng đêm** cũng tự gửi lên Drive, vào thư mục
+`Kế toán quán - Sao lưu dữ liệu` (giữ 30 bản mới nhất). Tắt / bật và xem lần gửi gần nhất ở
+**Hệ thống → Cài đặt → Sao lưu dữ liệu**.
+
 App chỉ có quyền `drive.file`: chỉ thấy và ghi được các file do chính nó tạo ra, **không đọc được** các
 file khác trong Drive của bạn.
 
@@ -34,22 +38,17 @@ Cần một tài khoản Google bất kỳ, nên dùng chính tài khoản sẽ 
    - Application type: **TVs and Limited Input devices**. Phải chọn đúng loại này.
    - Name: `May chu quan`, rồi bấm **Create**.
    - Chép **Client ID** và **Client secret**.
-5. **Khai báo cho máy chủ**: mở file `.env.prod` và điền 2 dòng sau:
+5. **Nhập vào app**: đăng nhập bằng tài khoản ADMIN, vào **Hệ thống → Cài đặt → Google Drive**, dán
+   **Client ID** và **Client secret** rồi bấm **Lưu**. Secret được mã hoá khi lưu và không hiện lại.
+   Không cần sửa file hay khởi động lại máy chủ. Hướng dẫn rút gọn các bước 1–4 cũng có ngay trong mục đó.
 
-   ```ini
-   GOOGLE_CLIENT_ID=1234567890-xxxx.apps.googleusercontent.com
-   GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
-   ```
+   > Cách cũ vẫn dùng được: điền `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` trong `.env.prod` rồi chạy lại
+   > `docker compose … up -d`. Nếu đã nhập trong Cài đặt thì app dùng thông tin trong Cài đặt.
 
-   Khởi động lại để máy chủ nhận cấu hình mới:
-
-   ```powershell
-   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-   ```
-
-6. **Kết nối**: đăng nhập app bằng tài khoản ADMIN, vào **Chứng từ → Sao lưu / Google Drive** và bấm
+6. **Kết nối**: cũng ở **Cài đặt → Google Drive** (hoặc **Chứng từ → Sao lưu / Google Drive**), bấm
    **Kết nối Google Drive**. Mở link hiện trên màn hình bằng điện thoại, nhập mã, chọn tài khoản Google
    và bấm **Cho phép**. Màn hình app sẽ tự chuyển sang "Đã kết nối".
+   Đổi sang Client ID khác thì kết nối cũ bị ngắt, cần kết nối lại.
 
 ## Dùng hằng tháng
 

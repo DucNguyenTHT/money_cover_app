@@ -12,14 +12,21 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 /** drive.file = only files this app created; it can never read the rest of the user's Drive. */
 export const SCOPES = 'openid email https://www.googleapis.com/auth/drive.file';
 
-export const isConfigured = () => !!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET;
+/** OAuth client of type "TVs and Limited Input devices" (entered in Settings, or GOOGLE_CLIENT_* env). */
+export interface Credentials {
+  clientId: string;
+  clientSecret: string;
+}
 
-const client = () => {
-  if (!isConfigured())
-    throw badRequest(
-      'Máy chủ chưa cài GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (xem docs/setup-google-drive.md)',
-    );
-  return { client_id: env.GOOGLE_CLIENT_ID!, client_secret: env.GOOGLE_CLIENT_SECRET! };
+/** Fallback when nothing was entered in Settings. */
+export const envCredentials = (): Credentials | null =>
+  env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+    ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+    : null;
+
+const client = (c: Credentials | null) => {
+  if (!c) throw badRequest('Chưa nhập Google Client ID / Client secret (Hệ thống → Cài đặt → Google Drive)');
+  return { client_id: c.clientId, client_secret: c.clientSecret };
 };
 
 /** Network / Google failures become a readable 409 instead of a 500. */
@@ -40,9 +47,9 @@ async function post(url: string, form: Record<string, string>) {
   return { status: res.status, body: (await res.json().catch(() => ({}))) as Record<string, unknown> };
 }
 
-export async function startDeviceFlow() {
+export async function startDeviceFlow(creds: Credentials | null) {
   const { status, body } = await post(`${OAUTH}/device/code`, {
-    client_id: client().client_id,
+    client_id: client(creds).client_id,
     scope: SCOPES,
   });
   if (status !== 200)
@@ -73,9 +80,9 @@ const emailFromIdToken = (idToken: unknown): string | null => {
   }
 };
 
-export async function pollDeviceFlow(deviceCode: string): Promise<PollResult> {
+export async function pollDeviceFlow(creds: Credentials | null, deviceCode: string): Promise<PollResult> {
   const { status, body } = await post(`${OAUTH}/token`, {
-    ...client(),
+    ...client(creds),
     device_code: deviceCode,
     grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
   });
@@ -91,9 +98,9 @@ export async function pollDeviceFlow(deviceCode: string): Promise<PollResult> {
 /** Thrown when the refresh token no longer works (user removed access in their Google account). */
 export class RevokedError extends Error {}
 
-export async function accessToken(refreshToken: string): Promise<string> {
+export async function accessToken(creds: Credentials | null, refreshToken: string): Promise<string> {
   const { status, body } = await post(`${OAUTH}/token`, {
-    ...client(),
+    ...client(creds),
     refresh_token: refreshToken,
     grant_type: 'refresh_token',
   });
@@ -161,4 +168,20 @@ export async function uploadFile(token: string, folderId: string, name: string, 
   }
   const body = (await res.json()) as { id: string; webViewLink?: string };
   return { id: body.id, link: body.webViewLink ?? null, size };
+}
+
+/** Files the app put in a folder, newest first (drive.file scope only ever sees the app's own files). */
+export async function listFolder(token: string, folderId: string) {
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+  const res = await driveFetch(
+    token,
+    `${DRIVE}/files?q=${q}&orderBy=createdTime desc&pageSize=200&fields=files(id,name,createdTime)`,
+  );
+  if (!res.ok) throw googleError(`Không đọc được thư mục trên Drive (${res.status})`, await res.text());
+  return ((await res.json()) as { files?: { id: string; name: string; createdTime: string }[] }).files ?? [];
+}
+
+export async function deleteFile(token: string, fileId: string) {
+  const res = await driveFetch(token, `${DRIVE}/files/${fileId}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) throw googleError(`Không xoá được bản cũ trên Drive (${res.status})`);
 }

@@ -7,6 +7,7 @@ import {
   Ban,
   Bell,
   CalendarX,
+  DatabaseBackup,
   Clock,
   KeyRound,
   Landmark,
@@ -51,9 +52,19 @@ function taxItems(d: Dashboard): AlertItem[] {
   return [];
 }
 
+const BACKUP_TEXT: Record<NonNullable<Dashboard['alerts']['backup']>, string> = {
+  NEVER: 'Chưa có bản sao lưu dữ liệu nào',
+  FAILED: 'Lần sao lưu dữ liệu gần nhất bị lỗi',
+  STALE: 'Đã hơn 2 ngày chưa có bản sao lưu dữ liệu mới',
+  DRIVE_FAILED: 'Bản sao lưu chưa gửi được lên Google Drive',
+};
+
 export function alertItems(d: Dashboard): AlertItem[] {
   const monthProfit = Number(d.monthProfitAfterTax ?? d.monthNetProfit);
   return [
+    ...(d.alerts.backup
+      ? [{ icon: DatabaseBackup, text: BACKUP_TEXT[d.alerts.backup], to: '/admin/system/settings' }]
+      : []),
     ...taxItems(d),
     ...(monthProfit < 0
       ? [

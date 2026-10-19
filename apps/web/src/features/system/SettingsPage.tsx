@@ -9,6 +9,8 @@ import { Card, Segmented, Select, Switch } from '@/components/ui/controls';
 import { Field, Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
+import { BackupSection } from './BackupSection';
+import { GoogleDriveSection } from './GoogleDriveSection';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 
@@ -348,6 +350,10 @@ export function SettingsPage() {
             />
           </div>
         </Section>
+
+        <GoogleDriveSection />
+
+        <BackupSection s={s} setS={setS} />
       </div>
     </div>
   );

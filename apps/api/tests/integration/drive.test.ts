@@ -115,7 +115,13 @@ describe('Google Drive upload', () => {
     const google = mockGoogle({ pendingPolls: 1 });
     await fileDocument(client, '2026-10-03', 'Chợ Bình Điền', 'c');
 
-    expect((await client.drive.status()).body).toEqual({ configured: true, connected: false, email: null });
+    expect((await client.drive.status()).body).toEqual({
+      configured: true,
+      clientId: 'test-client.apps.googleusercontent.com',
+      clientSource: 'ENV',
+      connected: false,
+      email: null,
+    });
     const code = await client.drive.connect({ body: {} });
     expect(code.body).toMatchObject({
       userCode: 'ABCD-EFGH',
@@ -172,5 +178,53 @@ describe('Google Drive upload', () => {
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ error: { code: 'DRIVE_NOT_CONNECTED' } });
     expect((await client.drive.status()).body).toMatchObject({ connected: false });
+  });
+});
+
+describe('Google client set in Settings', () => {
+  /** client_id sent with each Google OAuth request so far. */
+  const sentClientIds = () =>
+    vi
+      .mocked(globalThis.fetch)
+      .mock.calls.map(([, init]) =>
+        init?.body instanceof URLSearchParams ? init.body.get('client_id') : null,
+      )
+      .filter(Boolean);
+
+  it('overrides the server env, never shows the secret, and a new client needs a new sign-in', async () => {
+    const { client } = await makeUser({ username: 'chu', role: 'ADMIN' });
+    const staff = await makeUser({ username: 'thungan', role: 'STAFF' });
+    const body = { clientId: '111-abc.apps.googleusercontent.com', clientSecret: 'GOCSPX-shop-secret' };
+
+    expect((await staff.client.drive.saveClient({ body })).status).toBe(403);
+    expect((await client.drive.saveClient({ body: { ...body, clientId: 'not-a-client' } })).status).toBe(400);
+
+    const saved = await client.drive.saveClient({ body });
+    expect(saved.body).toMatchObject({ configured: true, clientId: body.clientId, clientSource: 'ADMIN' });
+    // The secret is stored encrypted and never sent back (status, settings, audit log).
+    const row = await prisma.setting.findUniqueOrThrow({ where: { key: 'google_client' } });
+    expect(JSON.stringify(row.value)).not.toContain('GOCSPX-shop-secret');
+    expect(JSON.stringify(saved.body)).not.toContain('GOCSPX');
+    expect(JSON.stringify((await client.settings.get()).body)).not.toContain('GOCSPX');
+    const audit = await prisma.auditLog.findMany({ where: { entity: 'google_drive' } });
+    expect(JSON.stringify(audit)).not.toContain('GOCSPX');
+
+    // Sign-in uses the client entered in Settings, not the env one.
+    mockGoogle();
+    await client.drive.connect({ body: {} });
+    await client.drive.poll({ body: {} });
+    expect(new Set(sentClientIds())).toEqual(new Set([body.clientId]));
+    expect((await client.drive.status()).body).toMatchObject({ connected: true });
+
+    // Another client: the old connection cannot work with it, so it is dropped.
+    await client.drive.saveClient({ body: { ...body, clientId: '222-xyz.apps.googleusercontent.com' } });
+    expect((await client.drive.status()).body).toMatchObject({ connected: false });
+
+    // Removing it falls back to the server env.
+    expect((await client.drive.clearClient({ body: {} })).body).toMatchObject({
+      configured: true,
+      clientId: 'test-client.apps.googleusercontent.com',
+      clientSource: 'ENV',
+    });
   });
 });

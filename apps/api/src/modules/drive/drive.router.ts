@@ -7,6 +7,11 @@ const s = initServer();
 
 export const driveRouter = s.router(driveContract, {
   status: async () => ({ status: 200, body: await drive.status() }),
+  saveClient: async ({ req, body }) => ({
+    status: 200,
+    body: await drive.saveClient(currentUser(req).id, body),
+  }),
+  clearClient: async ({ req }) => ({ status: 200, body: await drive.clearClient(currentUser(req).id) }),
   connect: async ({ req }) => ({ status: 200, body: await drive.connect(currentUser(req).id) }),
   poll: async ({ req }) => ({ status: 200, body: await drive.poll(currentUser(req).id) }),
   disconnect: async ({ req }) => ({ status: 200, body: await drive.disconnect(currentUser(req).id) }),

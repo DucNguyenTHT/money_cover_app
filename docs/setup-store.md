@@ -65,19 +65,31 @@ App chạy HTTPS bằng chứng chỉ do máy chủ tự cấp (cần cho PWA v�
 
 ## 6. Sao lưu
 
+**Dữ liệu (database) — tự động, không cần cài gì thêm.** API tự sao lưu mỗi ngày lúc 02:00 (đổi giờ ở
+**Hệ thống → Cài đặt → Sao lưu dữ liệu**) vào `backups\ketoan-YYYYMMDD-HHmm.dump`, giữ 30 bản mới nhất. Máy tắt
+lúc 02:00 thì sao lưu ngay khi bật lại. Ở đó cũng có nút **Sao lưu ngay**, xem bản gần nhất và lỗi nếu có;
+chuông thông báo báo khi lần sao lưu bị lỗi hoặc quá 2 ngày chưa có bản mới.
+
+**Lên Google Drive.** Kết nối Google Drive một lần ở **Hệ thống → Cài đặt → Google Drive** (nhập Client ID / secret rồi bấm Kết nối, xem
+`setup-google-drive.md`), sau đó mỗi bản sao lưu tự gửi lên thư mục _Kế toán quán - Sao lưu dữ liệu_ trên
+Drive (giữ 30 bản mới nhất). Tắt / bật ở Cài đặt → Sao lưu dữ liệu.
+
+**Chép ra ổ cứng ngoài + ảnh chứng từ** (nên làm thêm):
+
 ```powershell
-# Cài lịch sao lưu 02:00 hằng đêm (chạy PowerShell "Run as administrator" một lần):
+# Cài lịch chép 03:00 hằng đêm (chạy PowerShell "Run as administrator" một lần):
 powershell -ExecutionPolicy Bypass -File scripts\install-task.ps1
-# Sao lưu tay bất kỳ lúc nào:
+# Chép tay bất kỳ lúc nào (thêm -Dump để tự xuất database khi API không chạy):
 powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1
 ```
 
-- Bản sao lưu nằm ở `backups\` (giữ 30 bản mới nhất) và được chép sang `BACKUP_COPY_DIR`.
-- Nhật ký: `backups\backup.log`. Mỗi tuần nên mở thư mục kiểm tra có file mới.
-- **Ảnh chứng từ** (menu Chứng từ) nằm ở `storage\documents\<năm>\<tháng>\`. Mỗi đêm script chép các file
+- Script chép các bản sao lưu chưa có sang `BACKUP_COPY_DIR` (ổ cứng ngoài / thư mục OneDrive…).
+- **Ảnh chứng từ** (menu Chứng từ) nằm ở `storage\documents\<năm>\<tháng>\`. Script chép các file
   mới sang `backups\documents\` và `BACKUP_COPY_DIR\documents\`. Bản chép không bao giờ bị xoá bớt, nên ảnh
-  lỡ xoá trên máy chủ vẫn còn trong bản sao lưu. Nên đặt `BACKUP_COPY_DIR` vào ổ cứng ngoài hoặc thư mục
-  Google Drive / OneDrive để ảnh còn nguyên nếu máy chủ hỏng.
+  lỡ xoá trên máy chủ vẫn còn trong bản sao lưu. Ảnh chứng từ không tự lên Drive; gửi theo tháng / năm ở
+  menu Chứng từ (nút Google Drive).
+- Nhật ký script: `backups\backup.log`.
+- Giữ **một bản `.env.prod`** ngoài máy chủ (USB / trình quản lý mật khẩu): khôi phục trên máy mới cần nó.
 
 ### Khôi phục (khi hỏng máy / nhầm dữ liệu)
 
@@ -88,6 +100,7 @@ powershell -ExecutionPolicy Bypass -File scripts\restore-db.ps1 -File backups\ke
 Lệnh hỏi xác nhận (gõ `KHOIPHUC`), thay toàn bộ dữ liệu bằng bản sao lưu rồi khởi động lại API.
 Lệnh cũng chép lại các ảnh chứng từ còn thiếu từ `backups\documents\` vào `storage\documents\`. Trên máy
 mới, chép thư mục `documents` từ `BACKUP_COPY_DIR` vào `backups\` trước khi chạy lệnh.
+Bản trên Google Drive: tải file `.dump` từ thư mục _Kế toán quán - Sao lưu dữ liệu_ về `backups\` rồi chạy lệnh trên.
 Máy mới: làm lại bước 1–3 với **cùng `.env.prod`**, sau đó chạy lệnh khôi phục.
 
 **Nên thử khôi phục 1 lần ngay sau khi cài** (sang máy khác hoặc DB trống) để chắc chắn bản sao lưu dùng được.

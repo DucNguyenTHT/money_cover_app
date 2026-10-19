@@ -24,6 +24,7 @@ import { stocktakeRouter } from './modules/stocktake/stocktake.router';
 import { reportExport, reportsRouter } from './modules/reports/reports.router';
 import { documentExport, documentFiles, documentsRouter } from './modules/documents/documents.router';
 import { driveRouter } from './modules/drive/drive.router';
+import { backupsRouter } from './modules/backup/backup.router';
 import { architecturePage } from './modules/architecture/architecture.page';
 
 export function createApp() {
@@ -84,6 +85,7 @@ export function createApp() {
     reports: reportsRouter,
     documents: documentsRouter,
     drive: driveRouter,
+    backups: backupsRouter,
   });
   createExpressEndpoints(api, router, app, {
     globalMiddleware: [authMiddleware],

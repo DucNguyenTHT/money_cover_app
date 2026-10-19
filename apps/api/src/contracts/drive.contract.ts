@@ -7,8 +7,11 @@ const c = initContract();
 const admin = { roles: ['ADMIN'] } satisfies RouteMeta;
 
 export const driveStatus = z.object({
-  /** GOOGLE_CLIENT_ID / SECRET are set on the server. */
+  /** A Google OAuth client is set (in Settings, or GOOGLE_CLIENT_ID / SECRET on the server). */
   configured: z.boolean(),
+  /** Client ID in use (not secret); the client secret is never sent back. */
+  clientId: z.string().nullable(),
+  clientSource: z.enum(['ADMIN', 'ENV']).nullable(),
   connected: z.boolean(),
   email: z.string().nullable(),
 });
@@ -28,6 +31,27 @@ export const driveContract = c.router(
     status: {
       method: 'GET',
       path: '/api/drive',
+      metadata: admin,
+      responses: { 200: driveStatus, ...commonErrors },
+    },
+    saveClient: {
+      method: 'PUT',
+      path: '/api/drive/client',
+      body: z.object({
+        clientId: z
+          .string()
+          .trim()
+          .regex(/^[\w-]+\.apps\.googleusercontent\.com$/, 'Client ID có dạng …apps.googleusercontent.com'),
+        clientSecret: z.string().trim().min(10, 'Nhập Client secret').max(200),
+      }),
+      metadata: admin,
+      responses: { 200: driveStatus, ...commonErrors },
+      summary: 'Lưu Google OAuth client (loại TVs and Limited Input devices)',
+    },
+    clearClient: {
+      method: 'DELETE',
+      path: '/api/drive/client',
+      body: z.object({}),
       metadata: admin,
       responses: { 200: driveStatus, ...commonErrors },
     },

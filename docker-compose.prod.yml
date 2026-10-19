@@ -36,6 +36,8 @@ services:
       CORS_ORIGIN: ${PUBLIC_URL:-https://pos.local}
       TZ: Asia/Ho_Chi_Minh
       UPLOAD_DIR: /data/documents
+      # Nightly database dump made by the API itself (pg_dump in the image), kept in .\backups on the host.
+      BACKUP_DIR: /data/backups
       # Optional "Gửi lên Google Drive" (docs/setup-google-drive.md). Empty = feature shows setup hint.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -43,6 +45,7 @@ services:
       # Invoice photos live in a plain folder on the host (storage\documents) so the nightly
       # backup script can copy them next to the database dump.
       - ./storage/documents:/data/documents
+      - ./backups:/data/backups
     # Thermal printers are reached on the LAN (port 9100) through the default bridge network.
 
   web:

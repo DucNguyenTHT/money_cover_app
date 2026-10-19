@@ -67,6 +67,7 @@ import {
 } from '../../domain/tax/household';
 import { TAX_GROUPS } from '../../domain/enums';
 import { businessToday, getSettings } from '../settings/settings.service';
+import { issue as backupIssue } from '../backup/backup.service';
 import * as pricing from '../pricing/pricing.service';
 
 type Dec = Prisma.Decimal | null | undefined;
@@ -734,6 +735,7 @@ export async function dashboard(): Promise<Dashboard> {
     pending,
     lockedPins,
     settings,
+    backup,
     ytdSales,
   ] = await Promise.all([
     daily(from30, today),
@@ -752,6 +754,7 @@ export async function dashboard(): Promise<Dashboard> {
     }),
     prisma.user.count({ where: { pinLockedUntil: { gt: new Date() } } }),
     getSettings(),
+    backupIssue(),
     prisma.order.aggregate({
       where: {
         branchId,
@@ -809,6 +812,7 @@ export async function dashboard(): Promise<Dashboard> {
       cancelledToday: t?.cancelled ?? 0,
       belowCostToday: t?.belowCost ?? 0,
       unclosedDays: monthData.flags.unclosedDays,
+      backup,
       staleOpenOrders: openOrders.filter((o) => fromDbDate(o.businessDate) < today).length,
       lockedPins,
     },

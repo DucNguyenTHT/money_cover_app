@@ -21,4 +21,6 @@ export const DEFAULT_SETTINGS: Settings = {
   tax_regime: 'HOUSEHOLD',
   household_pit_method: 'INCOME',
   einvoice_registered: false,
+  backup_hour: 2,
+  backup_drive: true,
 };

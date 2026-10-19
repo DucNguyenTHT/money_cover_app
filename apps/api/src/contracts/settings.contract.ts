@@ -30,6 +30,10 @@ export const settingsSchema = z.object({
   household_pit_method: z.enum(['INCOME', 'REVENUE']),
   /** Đã đăng ký hoá đơn điện tử khởi tạo từ máy tính tiền (bắt buộc khi doanh thu năm trên 1 tỷ). */
   einvoice_registered: z.boolean(),
+  /** Giờ (0–23) chạy sao lưu dữ liệu tự động mỗi ngày. */
+  backup_hour: z.coerce.number().int().min(0).max(23),
+  /** Đẩy mỗi bản sao lưu lên Google Drive đã kết nối. */
+  backup_drive: z.boolean(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

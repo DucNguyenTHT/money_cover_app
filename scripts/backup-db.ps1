@@ -1,9 +1,12 @@
-﻿# Nightly database backup for the shop server.
-#   powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1
-# Keeps the newest 30 dumps in .\backups and copies each new one to BACKUP_COPY_DIR (from .env.prod) if set.
+﻿# Copy the backups off the shop server (nightly task, after the API's own 02:00 database dump).
+#   powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1          # copy dumps + invoice photos
+#   powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1 -Dump    # also make a dump now (API down)
+# The API writes the dumps to .\backups (Cài đặt → Sao lưu dữ liệu). This script copies the dumps not yet copied
+# to BACKUP_COPY_DIR (from .env.prod) and the invoice photos to backups\documents and BACKUP_COPY_DIR\documents.
 param(
   [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env.prod'),
-  [int]$Keep = 30
+  [int]$Keep = 30,
+  [switch]$Dump
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
@@ -18,24 +21,34 @@ if (Test-Path $EnvFile) {
   }
 }
 
-$file = Join-Path $dir ("ketoan-{0}.dump" -f (Get-Date -Format 'yyyyMMdd-HHmm'))
-# pg_dump custom format (compressed, restorable table by table). Written inside the container, then copied out
-# so PowerShell never touches the binary stream.
-docker compose -f $compose --env-file $EnvFile exec -T db pg_dump -U ketoan -d ketoan -Fc -f /tmp/backup.dump
-if ($LASTEXITCODE -ne 0) { throw 'pg_dump thất bại' }
-$id = (docker compose -f $compose --env-file $EnvFile ps -q db).Trim()
-docker cp "${id}:/tmp/backup.dump" $file
-if ($LASTEXITCODE -ne 0) { throw 'Không chép được file sao lưu ra máy' }
-docker compose -f $compose --env-file $EnvFile exec -T db rm -f /tmp/backup.dump | Out-Null
+if ($Dump) {
+  $file = Join-Path $dir ("ketoan-{0}.dump" -f (Get-Date -Format 'yyyyMMdd-HHmm'))
+  # pg_dump custom format (compressed, restorable table by table). Written inside the container, then copied out
+  # so PowerShell never touches the binary stream.
+  docker compose -f $compose --env-file $EnvFile exec -T db pg_dump -U ketoan -d ketoan -Fc -f /tmp/backup.dump
+  if ($LASTEXITCODE -ne 0) { throw 'pg_dump thất bại' }
+  $id = (docker compose -f $compose --env-file $EnvFile ps -q db).Trim()
+  docker cp "${id}:/tmp/backup.dump" $file
+  if ($LASTEXITCODE -ne 0) { throw 'Không chép được file sao lưu ra máy' }
+  docker compose -f $compose --env-file $EnvFile exec -T db rm -f /tmp/backup.dump | Out-Null
+  $size = (Get-Item $file).Length
+  if ($size -lt 1024) { throw "File sao lưu quá nhỏ ($size bytes) — kiểm tra lại" }
+  Write-Output "Đã sao lưu: $file ($([math]::Round($size / 1KB)) KB)"
+}
 
-$size = (Get-Item $file).Length
-if ($size -lt 1024) { throw "File sao lưu quá nhỏ ($size bytes) — kiểm tra lại" }
-Write-Output "Đã sao lưu: $file ($([math]::Round($size / 1KB)) KB)"
+$newest = Get-ChildItem $dir -Filter 'ketoan-*.dump' | Sort-Object Name -Descending | Select-Object -First 1
+if (-not $newest) { Write-Output 'Chưa có bản sao lưu nào trong backups\ — kiểm tra Cài đặt → Sao lưu dữ liệu' }
+elseif ($newest.LastWriteTime -lt (Get-Date).AddDays(-2)) {
+  Write-Output "CẢNH BÁO: bản sao lưu mới nhất ($($newest.Name)) đã hơn 2 ngày"
+}
 
 if ($copyDir) {
   New-Item -ItemType Directory -Force $copyDir | Out-Null
-  Copy-Item $file $copyDir
-  Write-Output "Đã chép sang: $copyDir"
+  # Only dumps not copied yet (/XO); the copy folder keeps its own history, nothing is deleted there.
+  robocopy $dir $copyDir 'ketoan-*.dump' /XO /R:2 /W:5 /NP /NFL /NDL /NJH /NJS | Out-Null
+  if ($LASTEXITCODE -ge 8) { throw "Không chép được bản sao lưu sang $copyDir (robocopy mã $LASTEXITCODE)" }
+  Write-Output "Đã chép bản sao lưu sang: $copyDir"
+  $global:LASTEXITCODE = 0
 }
 
 # Invoice photos (Chứng từ): copy only new files, never delete anything in the copies (/E, no /MIR or /PURGE),
