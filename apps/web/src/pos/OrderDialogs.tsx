@@ -10,7 +10,9 @@ import { client, errorMessage, ok } from '@/lib/api-client';
 import { money } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { useWithApproval } from './Approval';
-import { useFloor, whereLabel } from './data';
+import { dishGroups, lineName, useFloor, useMenu, useOptionGroups, whereLabel } from './data';
+import { OptionChooser } from './OptionPicker';
+import { resolveOptions } from '@ketoan/api/domain';
 
 type Done = (o: OrderDto) => void;
 const digits = (v: string) => v.replace(/\D/g, '');
@@ -128,6 +130,7 @@ export function ItemDialog({
 }) {
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState('');
+  const [optIds, setOptIds] = useState<number[]>([]);
   const [disc, setDisc] = useState('');
   const [discReason, setDiscReason] = useState('');
   const [cancelMode, setCancelMode] = useState(false);
@@ -136,11 +139,17 @@ export function ItemDialog({
   const [reason, setReason] = useState('');
   const { busy, error, setError, run } = useSubmit();
   const withApproval = useWithApproval();
+  const menu = useMenu(order.channel);
+  const optionGroups = useOptionGroups();
+  const groups = item
+    ? dishGroups(optionGroups.data, menu.data?.find((d) => d.id === item.dishId)?.optionGroupIds ?? [])
+    : [];
 
   useEffect(() => {
     if (!item) return;
     setQty(item.qty);
     setNote(item.note ?? '');
+    setOptIds(item.options.flatMap((o) => (o.optionId === null ? [] : [o.optionId])));
     setDisc(Number(item.discountAmount) ? String(Number(item.discountAmount)) : '');
     setDiscReason(item.discountReason ?? '');
     setCancelMode(false);
@@ -152,7 +161,18 @@ export function ItemDialog({
 
   if (!item) return null;
   const fresh = item.kitchenStatus === 'NEW';
-  const lineAmount = Number(item.unitPrice) * qty;
+  // Options can still change before the kitchen gets the line; the price follows.
+  const chosen = resolveOptions(groups, optIds);
+  const keyOf = (ids: number[]) => [...ids].sort((a, b) => a - b).join(',');
+  const optionsChanged =
+    fresh &&
+    groups.length > 0 &&
+    keyOf(optIds) !== keyOf(item.options.flatMap((o) => (o.optionId === null ? [] : [o.optionId])));
+  const unitPrice =
+    optionsChanged && !('error' in chosen)
+      ? Number(item.basePrice) + chosen.price.toNumber()
+      : Number(item.unitPrice);
+  const lineAmount = unitPrice * qty;
 
   const save = () =>
     run(async () => {
@@ -163,6 +183,7 @@ export function ItemDialog({
             body: {
               version: order.version,
               ...(fresh ? { qty, note: note.trim() || null } : {}),
+              ...(optionsChanged ? { optionIds: optIds } : {}),
               discountAmount: disc || '0',
               discountReason: Number(disc) > 0 ? discReason.trim() : null,
               approval,
@@ -201,7 +222,7 @@ export function ItemDialog({
     <Dialog
       open
       onClose={onClose}
-      title={item.dishName}
+      title={lineName(item)}
       width={460}
       footer={
         cancelMode ? (
@@ -226,7 +247,7 @@ export function ItemDialog({
             <Button
               variant="primary"
               loading={busy}
-              disabled={Number(disc) > 0 && !discReason.trim()}
+              disabled={(Number(disc) > 0 && !discReason.trim()) || (optionsChanged && 'error' in chosen)}
               onClick={save}
             >
               Lưu
@@ -264,7 +285,7 @@ export function ItemDialog({
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-muted">
-              {money(item.unitPrice)} × {qty} = <b className="num text-ink">{money(lineAmount)}</b>
+              {money(unitPrice)} × {qty} = <b className="num text-ink">{money(lineAmount)}</b>
             </span>
             {fresh ? (
               <Stepper label="Số lượng" value={qty} min={1} max={999} onChange={setQty} />
@@ -272,6 +293,17 @@ export function ItemDialog({
               <span className="text-[13px] text-muted">Đã gửi bếp · SL {item.qty}</span>
             )}
           </div>
+          {fresh && groups.length > 0 && (
+            <>
+              <OptionChooser groups={groups} value={optIds} onChange={setOptIds} />
+              {'error' in chosen && <FormError message={chosen.error} />}
+            </>
+          )}
+          {!fresh && item.options.length > 0 && (
+            <p className="text-[13px] text-muted">
+              Tuỳ chọn: {item.options.map((o) => o.name).join(', ')} (đã gửi bếp, không đổi được)
+            </p>
+          )}
           {fresh && (
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
               Ghi chú cho bếp
@@ -597,13 +629,13 @@ export function SplitDialog({
           {active.map((i) => (
             <div key={i.id} className="flex items-center justify-between gap-3 px-3 py-2">
               <span className="min-w-0">
-                <span className="font-medium">{i.dishName}</span>
+                <span className="font-medium">{lineName(i)}</span>
                 <span className="block text-xs text-muted">
                   {i.qty} × {money(i.unitPrice)}
                 </span>
               </span>
               <Stepper
-                label={`Tách ${i.dishName}`}
+                label={`Tách ${lineName(i)}`}
                 value={picked[i.id] ?? 0}
                 min={0}
                 max={i.qty}
@@ -715,7 +747,7 @@ export function CancelOrderDialog({
                     setWasted((w) => (e.target.checked ? [...w, i.id] : w.filter((x) => x !== i.id)))
                   }
                 />
-                {i.qty} × {i.dishName}
+                {i.qty} × {lineName(i)}
               </label>
             ))}
           </fieldset>

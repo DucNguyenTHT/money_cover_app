@@ -28,16 +28,29 @@ export interface SoldLine {
   qty: Num;
   channel: Channel;
   recipe: readonly RecipeLine[];
+  /**
+   * Options chosen for the line (domain/menu/options.ts): `factor` multiplies the recipe's ingredient lines (size;
+   * packaging stays one per portion), `extras` are added per portion (extra egg…).
+   */
+  factor?: Num;
+  extras?: readonly { ingredientId: number; qty: Num }[];
 }
 
 /** Total ingredient usage (stock units) for a set of sold dishes. */
 export function consumption(sold: readonly SoldLine[]): Map<number, Decimal> {
   const out = new Map<number, Decimal>();
+  const add = (id: number, q: Decimal) => out.set(id, (out.get(id) ?? ZERO).add(q));
   for (const s of sold) {
     for (const r of s.recipe) {
       if (!scopeApplies(r.scope, s.channel)) continue;
-      out.set(r.ingredientId, (out.get(r.ingredientId) ?? ZERO).add(D(r.qty).mul(s.qty)));
+      add(
+        r.ingredientId,
+        D(r.qty)
+          .mul(r.scope === 'ALL' ? (s.factor ?? 1) : 1)
+          .mul(s.qty),
+      );
     }
+    for (const e of s.extras ?? []) add(e.ingredientId, D(e.qty).mul(s.qty));
   }
   return out;
 }

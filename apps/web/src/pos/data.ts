@@ -1,7 +1,7 @@
 // Queries and the realtime wiring shared by every selling screen (/pos, /kitchen, order history).
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { OrderDto } from '@ketoan/api/contracts';
-import type { Channel } from '@ketoan/api/domain';
+import type { OptionGroupDto, OrderDto } from '@ketoan/api/contracts';
+import { optionsLabel, type Channel, type OptionGroupDef } from '@ketoan/api/domain';
 import { client, ok } from '@/lib/api-client';
 import { useRealtime } from '@/lib/socket';
 
@@ -11,6 +11,7 @@ export const posKeys = {
   orders: ['pos', 'orders'] as const,
   menu: (channel: Channel) => ['pos', 'menu', channel] as const,
   categories: ['pos', 'categories'] as const,
+  optionGroups: ['pos', 'option-groups'] as const,
   approvers: ['pos', 'approvers'] as const,
   apps: ['pos', 'apps'] as const,
   settings: ['pos', 'settings'] as const,
@@ -34,6 +35,25 @@ export const useMenu = (channel: Channel) =>
     queryFn: async () => ok(await client.menu.listDishes({ query: { channel } })),
     staleTime: 60_000,
   });
+
+export const useOptionGroups = () =>
+  useQuery({
+    queryKey: posKeys.optionGroups,
+    queryFn: async () => ok(await client.menu.listOptionGroups()),
+    staleTime: 60_000,
+  });
+
+/** Option groups of one dish, in its order, as the domain rules need them (no stock data on the till). */
+export function dishGroups(all: OptionGroupDto[] | undefined, groupIds: readonly number[]): OptionGroupDef[] {
+  return groupIds.flatMap((id) => {
+    const g = all?.find((x) => x.id === id);
+    return g ? [{ ...g, options: g.options.map((o) => ({ ...o, ingredients: [] })) }] : [];
+  });
+}
+
+/** "Phở bò (Lớn · Trứng)": the dish of an order line with its options. */
+export const lineName = (i: { dishName: string; options: { groupName: string; name: string }[] }) =>
+  i.options.length ? `${i.dishName} (${optionsLabel(i.options)})` : i.dishName;
 
 export const useCategories = () =>
   useQuery({

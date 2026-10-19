@@ -402,6 +402,11 @@ function flowsSection() {
         'giá tại ngày bán: tại quán / mang về = giá quán; app = giá riêng của app → giá app chung → giá quán',
         'order_items · dish_prices.delivery_app_id',
       ],
+      [
+        'Tuỳ chọn món',
+        'size / topping / yêu cầu: + tiền vào giá dòng, size nhân định mức, topping cộng nguyên liệu; lưu bản chụp',
+        'option_groups · options · order_item_options · order_item_extras',
+      ],
       ['Gửi bếp', 'in phiếu ESC/POS theo trạm, màn bếp nhận realtime', 'kitchen_status · printers'],
       ['Thanh toán', 'nhiều phương thức, VietQR, giảm giá cần PIN khi vượt mức', 'order_payments'],
       [
@@ -443,6 +448,11 @@ function flowsSection() {
         'Áp dụng giá mới',
         'theo ngày, cho quán / app chung / từng app; không lùi về ngày món đã bán; có lịch sử giá',
         'dish_prices',
+      ],
+      [
+        'Tuỳ chọn',
+        'nhóm dùng chung (chọn 1 / chọn nhiều, bắt buộc, tối đa), gắn cho món theo thứ tự',
+        'option_groups · options · option_ingredients · dish_option_groups',
       ],
     ]),
     flow('Kỳ kế toán (tháng)', 'Lãi lỗ tổng hợp theo tháng; quý / năm = cộng các tháng.', [

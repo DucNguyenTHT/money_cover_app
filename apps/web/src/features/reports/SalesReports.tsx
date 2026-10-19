@@ -176,7 +176,7 @@ export function DailyReportPage() {
 
 // ---------------------------------------------------------------- sales breakdown
 
-type View = 'hour' | 'channel' | 'table' | 'staff' | 'method' | 'dish';
+type View = 'hour' | 'channel' | 'table' | 'staff' | 'method' | 'dish' | 'option';
 
 export function SalesReportPage() {
   const [range, setRange] = useState<Range>(thisMonthRange);
@@ -229,6 +229,11 @@ export function SalesReportPage() {
           head: ['Món', 'SL', 'Doanh thu thuần'],
           rows: s.topDishes.map((r) => [r.name, r.qty, Number(r.netRevenue)]),
         };
+      case 'option':
+        return {
+          head: ['Tuỳ chọn / topping', 'SL', 'Tiền cộng thêm'],
+          rows: s.topOptions.map((r) => [`${r.groupName}: ${r.name}`, r.qty, Number(r.amount)]),
+        };
     }
   };
   const t = table();
@@ -237,7 +242,7 @@ export function SalesReportPage() {
     <div>
       <PageHeader
         title="Phân tích bán hàng"
-        subtitle="Theo giờ, kênh, bàn, nhân viên, hình thức thanh toán, món bán chạy"
+        subtitle="Theo giờ, kênh, bàn, nhân viên, hình thức thanh toán, món và topping bán chạy"
         actions={
           s && (
             <ExportButton
@@ -273,6 +278,7 @@ export function SalesReportPage() {
             { value: 'staff', label: 'Nhân viên' },
             { value: 'method', label: 'Thanh toán' },
             { value: 'dish', label: 'Món bán chạy' },
+            { value: 'option', label: 'Topping' },
           ]}
         />
       </div>
@@ -299,8 +305,11 @@ export function SalesReportPage() {
             )
           ) : (
             <DivergingBars
-              rows={t.rows.slice(0, 15).map((r) => ({ label: String(r[0]), value: Number(r[2]) }))}
-              format={(v) => money(v)}
+              // Toppings: by portions (requests like "Ít cay" add no money).
+              rows={t.rows
+                .slice(0, 15)
+                .map((r) => ({ label: String(r[0]), value: Number(view === 'option' ? r[1] : r[2]) }))}
+              format={(v) => (view === 'option' ? `${v} phần` : money(v))}
             />
           )}
         </Card>

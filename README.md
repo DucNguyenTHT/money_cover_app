@@ -1,7 +1,7 @@
 # Quán ăn — Bán hàng (POS) & Kế toán nội bộ
 
 Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR, đơn app giao hàng), kho FIFO theo lô (nhập, xuất, nợ kho,
-kiểm kê), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá), lãi lỗ tháng / quý / năm,
+kiểm kê), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá, size / topping), lãi lỗ tháng / quý / năm,
 khoá sổ, lưu trữ chứng từ (ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên Google Drive), thuế hộ kinh doanh
 (GTGT + TNCN tạm tính, so sánh 2 cách tính, báo cáo "Thuế phải nộp") và sao lưu dữ liệu tự động mỗi đêm (kèm bản
 trên Telegram / Google Drive).

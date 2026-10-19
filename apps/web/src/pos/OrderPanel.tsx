@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import type { OrderDto, OrderItemDto } from '@ketoan/api/contracts';
+import { optionsLabel } from '@ketoan/api/domain';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -19,7 +20,7 @@ import { client, errorMessage, HttpError, ok } from '@/lib/api-client';
 import { money } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { usePos } from './context';
-import { CHANNEL_LABEL, useFloor, useOrder, usePosSettings, useSetOrder, whereLabel } from './data';
+import { CHANNEL_LABEL, useFloor, useOrder, usePosSettings, useSetOrder, whereLabel, lineName } from './data';
 import {
   CancelOrderDialog,
   DiscountDialog,
@@ -274,7 +275,12 @@ export function OrderPanel({ onPaid, onClose }: { onPaid?: () => void; onClose?:
                         }),
                       ),
                     )
-                  : addDish(i.dishId)
+                  : // Sent line: one more portion as a new line, with the same options.
+                    addDish(
+                      i.dishId,
+                      1,
+                      i.options.flatMap((o) => (o.optionId === null ? [] : [o.optionId])),
+                    )
               }
               onMinus={() =>
                 i.kitchenStatus !== 'NEW'
@@ -305,7 +311,7 @@ export function OrderPanel({ onPaid, onClose }: { onPaid?: () => void; onClose?:
             <summary className="cursor-pointer">{cancelled.length} món đã huỷ</summary>
             {cancelled.map((i) => (
               <p key={i.id} className="mt-1 line-through decoration-faint">
-                {i.qty} × {i.dishName} <span className="no-underline">— {i.cancelReason}</span>
+                {i.qty} × {lineName(i)} <span className="no-underline">— {i.cancelReason}</span>
               </p>
             ))}
           </details>
@@ -523,6 +529,9 @@ function Line({
       <span className="text-[13px] text-faint">{no}.</span>
       <button onClick={onOpen} className="flex min-w-0 flex-col items-start gap-0.5 text-left">
         <span className="max-w-full truncate font-medium">{item.dishName}</span>
+        {item.options.length > 0 && (
+          <span className="max-w-full truncate text-xs text-ink">{optionsLabel(item.options)}</span>
+        )}
         <span className="max-w-full truncate text-xs">
           <span className={st.cls}>
             {item.station === 'BAR' && item.kitchenStatus === 'SENT' ? 'Bar đang làm' : st.label}

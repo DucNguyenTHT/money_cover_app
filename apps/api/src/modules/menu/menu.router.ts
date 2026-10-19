@@ -5,6 +5,7 @@ import { overheadsContract } from '../../contracts/overheads.contract';
 import { currentUser } from '../../core/auth';
 import { redactFor } from '../../core/redact';
 import * as menu from './menu.service';
+import * as options from './options.service';
 import * as pricing from '../pricing/pricing.service';
 import * as overheads from '../overheads/overheads.service';
 
@@ -45,6 +46,19 @@ export const menuRouter = s.router(menuContract, {
     status: 200,
     body: await menu.deleteRecipe(currentUser(req).id, params.id, params.recipeId, body.reason),
   }),
+  listOptionGroups: async () => ({ status: 200, body: await options.list() }),
+  createOptionGroup: async ({ req, body }) => ({
+    status: 201,
+    body: await options.save(currentUser(req).id, null, body),
+  }),
+  updateOptionGroup: async ({ req, params, body }) => ({
+    status: 200,
+    body: await options.save(currentUser(req).id, params.id, body),
+  }),
+  setDishOptionGroups: async ({ req, params, body }) => {
+    await options.setDishGroups(currentUser(req).id, params.id, body.groupIds);
+    return { status: 200, body: await menu.getDish(params.id) };
+  },
   setAvailability: async ({ req, params, body }) => ({
     status: 200,
     body: await menu.setAvailability(currentUser(req).id, params.id, body.soldOut),

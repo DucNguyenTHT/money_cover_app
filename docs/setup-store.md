@@ -64,6 +64,8 @@ App chạy HTTPS bằng chứng chỉ do máy chủ tự cấp (cần cho PWA v�
 5. **Hệ thống → Nhập dữ liệu Excel**: tải file mẫu, điền nguyên liệu → món → định mức → **tồn đầu**, nhập theo đúng thứ tự đó.
    File mẫu món có cột **Giá app** (giá chung) và một cột **Giá <tên app>** cho mỗi app — tạo app ở bước 4 trước khi tải mẫu.
    Sau này đổi giá từng app ở _Thực đơn → món → Giá bán_.
+   Size / topping / yêu cầu (ít cay…): tạo ở _Thực đơn → Tuỳ chọn món_ (có mẫu sẵn) rồi gắn cho món ở
+   _Sửa món → Tuỳ chọn_.
 6. **Hệ thống → Cài đặt → Telegram** (khuyên dùng, 3 phút, xem `setup-telegram.md`) hoặc **Google Drive**
    (xem `setup-google-drive.md`) để bản sao lưu hằng đêm có thêm một bản ngoài máy chủ.
 

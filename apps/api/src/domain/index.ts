@@ -16,3 +16,4 @@ export * from './period/pnl';
 export * from './documents/file-type';
 export * from './documents/permissions';
 export * from './tax/household';
+export * from './menu/options';

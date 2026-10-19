@@ -32,7 +32,18 @@ export const orderItemSchema = z.object({
   dishName: z.string(),
   station: z.enum(STATIONS),
   qty: z.number(),
+  /** Dish price before options; unitPrice = basePrice + the options' prices. */
+  basePrice: decimalString,
   unitPrice: decimalString,
+  /** Options chosen (size, toppings, requests), as sold. */
+  options: z.array(
+    z.object({
+      optionId: z.number().nullable(),
+      groupName: z.string(),
+      name: z.string(),
+      price: decimalString,
+    }),
+  ),
   discountAmount: decimalString,
   discountReason: z.string().nullable(),
   amount: decimalString,
@@ -171,6 +182,8 @@ const newItem = z.object({
   dishId: z.number().int(),
   qty: z.number().int().min(1).max(999),
   note: z.string().trim().max(120).nullable().optional(),
+  /** Options picked; omitted = the defaults of the dish's option groups. */
+  optionIds: z.array(z.number().int()).optional(),
 });
 
 export const openOrderInput = z.object({
@@ -267,6 +280,8 @@ export const ordersContract = c.router(
         version,
         qty: z.number().int().min(1).max(999).optional(),
         note: z.string().trim().max(120).nullable().optional(),
+        /** Change the options (line not sent to the kitchen yet): re-priced. */
+        optionIds: z.array(z.number().int()).optional(),
         discountAmount: money.optional(),
         discountReason: z.string().trim().max(200).nullable().optional(),
         approval: approvalSchema.optional(),
@@ -396,6 +411,8 @@ export const kitchenItemSchema = z.object({
   where: z.string(),
   dishName: z.string(),
   qty: z.number(),
+  /** "Lớn · Trứng, Thịt · Ít cay" (empty when none). */
+  options: z.string(),
   note: z.string().nullable(),
   kitchenStatus: z.enum(KITCHEN_STATUSES),
   sentAt: z.string(),

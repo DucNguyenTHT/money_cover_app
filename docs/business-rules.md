@@ -21,6 +21,19 @@ Các công thức nằm trong `apps/api/src/domain` (có unit test). Tài liệu
 | Huỷ đơn          | Không xoá: chuyển "Đã huỷ" + lý do. Đơn mở / đã trả trong ngày: nhân viên được huỷ. Ngày trước hoặc ngày đã chốt: cần ADMIN (PIN). Đã trả → hoàn lô; món đã chế biến → phiếu xuất huỷ |
 | Đồng thời        | Mỗi lần sửa đơn gửi kèm `version`; máy khác đã sửa trước → 409, POS tải lại đơn                                                                                                       |
 
+## Tuỳ chọn món (size, topping, yêu cầu)
+
+- **Nhóm tuỳ chọn** dùng chung cho nhiều món: chọn 1 (size) hoặc chọn nhiều (topping, yêu cầu), có thể bắt buộc,
+  giới hạn số lựa chọn, có lựa chọn chọn sẵn. Món dùng các nhóm được gắn ở _Sửa món → Tuỳ chọn_.
+- **Giá dòng** = giá món (theo kênh / app) + tiền các tuỳ chọn (giống nhau mọi kênh).
+- **Kho:** hệ số định mức của tuỳ chọn (size Lớn ×1,5) nhân các dòng định mức _mọi kênh_ (bao bì giữ 1 / phần);
+  nguyên liệu của tuỳ chọn (Thêm trứng → 1 quả) cộng thêm mỗi phần. Giá vốn món, hao hụt kiểm kê tính cả phần này.
+- **Bản chụp:** tên, giá, hệ số và nguyên liệu của tuỳ chọn được lưu vào dòng đơn lúc gọi; sửa / xoá tuỳ chọn
+  sau đó không đổi đơn cũ. Tuỳ chọn đã bán bị bỏ khỏi nhóm chỉ bị ẩn.
+- **POS:** món có nhóm bắt buộc chưa có lựa chọn chọn sẵn → mở bảng chọn; còn lại thêm ngay với lựa chọn chọn sẵn.
+  Sửa tuỳ chọn được khi dòng chưa gửi bếp. Hai dòng chỉ gộp khi cùng món, cùng tuỳ chọn, cùng ghi chú, chưa giảm giá.
+- Phiếu bếp / màn bếp / bill in tuỳ chọn dưới tên món. Báo cáo bán hàng có mục "Topping".
+
 ## Kho
 
 - **FIFO theo lô**: mỗi dòng phiếu nhập là một lô với giá nhập riêng; xuất lấy lô cũ nhất trước. Lô bị khoá hàng (`SELECT … FOR UPDATE`) theo thứ tự để không trùng khi 2 máy thanh toán cùng lúc.

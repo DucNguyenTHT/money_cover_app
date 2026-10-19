@@ -75,19 +75,34 @@ async function periodStart(db: Db, branchId: number, date: string, selfId: numbe
   return opening ? fromDbDate(opening.date) : null;
 }
 
-/** How much of one ingredient each dish used in PAID orders of (from, to]. */
+/**
+ * How much of one ingredient each dish used in PAID orders of (from, to]: recipe × size factor (ingredient lines
+ * only, packaging stays one per portion) + extra ingredients of the options chosen (order_item_extras).
+ */
 async function usageByDish(db: Db, branchId: number, ingredientId: number, from: string | null, to: string) {
   const rows = await db.$queryRaw<{ dish_id: number; qty: Prisma.Decimal }[]>`
-    SELECT oi.dish_id, SUM(oi.qty * ri.qty) AS qty
-    FROM order_items oi
-    JOIN orders o ON o.id = oi.order_id
-    JOIN dish_recipe_items ri ON ri.recipe_id = oi.recipe_id
-    WHERE o.branch_id = ${branchId} AND o.status = 'PAID' AND oi.status = 'ACTIVE'
-      AND ri.ingredient_id = ${ingredientId}
-      AND (ri.scope = 'ALL' OR o.channel <> 'DINE_IN')
-      AND o.business_date <= ${toDbDate(to)}::date
-      AND (${from}::date IS NULL OR o.business_date > ${from}::date)
-    GROUP BY oi.dish_id`;
+    SELECT dish_id, SUM(qty) AS qty FROM (
+      SELECT oi.dish_id,
+             oi.qty * ri.qty * (CASE WHEN ri.scope = 'ALL' THEN oi.recipe_factor ELSE 1 END) AS qty
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      JOIN dish_recipe_items ri ON ri.recipe_id = oi.recipe_id
+      WHERE o.branch_id = ${branchId} AND o.status = 'PAID' AND oi.status = 'ACTIVE'
+        AND ri.ingredient_id = ${ingredientId}
+        AND (ri.scope = 'ALL' OR o.channel <> 'DINE_IN')
+        AND o.business_date <= ${toDbDate(to)}::date
+        AND (${from}::date IS NULL OR o.business_date > ${from}::date)
+      UNION ALL
+      SELECT oi.dish_id, oi.qty * ex.qty AS qty
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      JOIN order_item_extras ex ON ex.order_item_id = oi.id
+      WHERE o.branch_id = ${branchId} AND o.status = 'PAID' AND oi.status = 'ACTIVE'
+        AND ex.ingredient_id = ${ingredientId}
+        AND o.business_date <= ${toDbDate(to)}::date
+        AND (${from}::date IS NULL OR o.business_date > ${from}::date)
+    ) u
+    GROUP BY dish_id`;
   return rows.map((r) => ({ dishId: r.dish_id, qty: r.qty.toString() }));
 }
 

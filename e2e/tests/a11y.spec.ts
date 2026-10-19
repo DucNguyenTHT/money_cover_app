@@ -10,6 +10,7 @@ const PAGES = [
   '/kitchen',
   '/admin',
   '/admin/menu/dishes',
+  '/admin/menu/options',
   '/admin/menu/cost-sheet',
   '/admin/inventory/receipts',
   '/admin/inventory/stock',

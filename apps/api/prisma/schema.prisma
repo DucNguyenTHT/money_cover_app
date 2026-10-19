@@ -183,6 +183,8 @@ model Ingredient {
   lots           Lot[]
   issueItems     IssueItem[]
   stocktakeItems StocktakeItem[]
+  optionItems    OptionIngredient[]
+  orderExtras    OrderItemExtra[]
 
   @@map("ingredients")
 }
@@ -221,6 +223,7 @@ model Dish {
   category             DishCategory              @relation(fields: [categoryId], references: [id])
   prices               DishPrice[]
   recipes              DishRecipe[]
+  optionGroups         DishOptionGroup[]
   orderItems           OrderItem[]
   stocktakeAllocations StocktakeDishAllocation[]
 
@@ -282,6 +285,80 @@ model DishRecipeItem {
 
   @@unique([recipeId, ingredientId, scope])
   @@map("dish_recipe_items")
+}
+
+/// Nhóm tuỳ chọn
+/// Nhóm tuỳ chọn dùng chung cho nhiều món: Size (chọn 1), Thêm topping (chọn nhiều), Yêu cầu (ít cay…).
+/// Lưu: tên, chọn 1 hay nhiều, bắt buộc, số lựa chọn tối đa, thứ tự, đang dùng.
+model OptionGroup {
+  id        Int     @id @default(autoincrement())
+  name      String
+  /// true = chọn nhiều (topping); false = chọn 1 (size)
+  multi     Boolean @default(false)
+  required  Boolean @default(false)
+  /// Chọn nhiều: tối đa bao nhiêu lựa chọn (null = không giới hạn)
+  maxSelect Int?    @map("max_select")
+  sort      Int     @default(0)
+  active    Boolean @default(true)
+
+  options Option[]
+  dishes  DishOptionGroup[]
+
+  @@map("option_groups")
+}
+
+/// Tuỳ chọn
+/// Một lựa chọn trong nhóm: Size lớn, Thêm trứng, Ít cay…
+/// Lưu: tên, tiền cộng thêm, hệ số nhân định mức (size), chọn sẵn, thứ tự, đang dùng.
+model Option {
+  id           Int     @id @default(autoincrement())
+  groupId      Int     @map("group_id")
+  name         String
+  /// Tiền cộng thêm vào giá món (mọi kênh)
+  price        Decimal @default(0) @db.Decimal(16, 2)
+  /// Nhân toàn bộ định mức món (Size lớn 1,5; nhỏ 0,8); 1 = không đổi
+  recipeFactor Decimal @default(1) @map("recipe_factor") @db.Decimal(8, 4)
+  isDefault    Boolean @default(false) @map("is_default")
+  sort         Int     @default(0)
+  active       Boolean @default(true)
+
+  group       OptionGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  ingredients OptionIngredient[]
+  orderItems  OrderItemOption[]
+
+  @@index([groupId])
+  @@map("options")
+}
+
+/// Nguyên liệu của tuỳ chọn
+/// Nguyên liệu trừ thêm khi chọn tuỳ chọn (Thêm trứng → 1 quả trứng).
+/// Lưu: tuỳ chọn, nguyên liệu, số lượng mỗi phần (đơn vị kho).
+model OptionIngredient {
+  id           Int     @id @default(autoincrement())
+  optionId     Int     @map("option_id")
+  ingredientId Int     @map("ingredient_id")
+  qty          Decimal @db.Decimal(16, 4)
+
+  option     Option     @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([optionId, ingredientId])
+  @@map("option_ingredients")
+}
+
+/// Tuỳ chọn của món
+/// Món nào dùng nhóm tuỳ chọn nào, theo thứ tự hiện trên POS.
+/// Lưu: món, nhóm tuỳ chọn, thứ tự.
+model DishOptionGroup {
+  dishId  Int @map("dish_id")
+  groupId Int @map("group_id")
+  sort    Int @default(0)
+
+  dish  Dish        @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  group OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([dishId, groupId])
+  @@map("dish_option_groups")
 }
 
 /// Khu vực
@@ -450,7 +527,13 @@ model OrderItem {
   recipeId       Int?          @map("recipe_id")
   station        Station
   qty            Int
+  /// Giá món (theo kênh / app, chưa gồm tuỳ chọn); unitPrice = basePrice + tiền các tuỳ chọn
+  basePrice      Decimal       @default(0) @map("base_price") @db.Decimal(16, 2)
   unitPrice      Decimal       @map("unit_price") @db.Decimal(16, 2)
+  /// Tích hệ số định mức của các tuỳ chọn đã chọn (size)
+  recipeFactor   Decimal       @default(1) @map("recipe_factor") @db.Decimal(8, 4)
+  /// Các tuỳ chọn đã chọn (id tăng dần, nối bằng dấu phẩy) — gộp dòng chỉ khi giống nhau
+  optionsKey     String        @default("") @map("options_key")
   discountAmount Decimal       @default(0) @map("discount_amount") @db.Decimal(16, 2)
   discountReason String?       @map("discount_reason")
   amount         Decimal       @db.Decimal(16, 2)
@@ -469,13 +552,51 @@ model OrderItem {
   cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz
   wasted         Boolean       @default(false)
 
-  order  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  dish   Dish        @relation(fields: [dishId], references: [id])
-  recipe DishRecipe? @relation(fields: [recipeId], references: [id])
+  order   Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dish    Dish              @relation(fields: [dishId], references: [id])
+  recipe  DishRecipe?       @relation(fields: [recipeId], references: [id])
+  options OrderItemOption[]
+  extras  OrderItemExtra[]
 
   @@index([orderId])
   @@index([station, kitchenStatus])
   @@map("order_items")
+}
+
+/// Tuỳ chọn trong đơn
+/// Bản chụp tuỳ chọn khách chọn cho một dòng món, giữ nguyên dù sau này đổi tên / giá tuỳ chọn.
+/// Lưu: dòng món, tuỳ chọn gốc, tên nhóm, tên, tiền cộng thêm.
+model OrderItemOption {
+  id          Int     @id @default(autoincrement())
+  orderItemId Int     @map("order_item_id")
+  optionId    Int?    @map("option_id")
+  groupName   String  @map("group_name")
+  name        String
+  price       Decimal @db.Decimal(16, 2)
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  option    Option?   @relation(fields: [optionId], references: [id], onDelete: SetNull)
+
+  @@index([orderItemId])
+  @@index([optionId])
+  @@map("order_item_options")
+}
+
+/// Nguyên liệu thêm của dòng món
+/// Bản chụp nguyên liệu trừ thêm cho mỗi phần do tuỳ chọn (Thêm trứng…), dùng khi trừ kho và phân bổ kiểm kê.
+/// Lưu: dòng món, nguyên liệu, số lượng mỗi phần (đơn vị kho).
+model OrderItemExtra {
+  id           Int     @id @default(autoincrement())
+  orderItemId  Int     @map("order_item_id")
+  ingredientId Int     @map("ingredient_id")
+  qty          Decimal @db.Decimal(16, 4)
+
+  orderItem  OrderItem  @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@index([orderItemId])
+  @@index([ingredientId])
+  @@map("order_item_extras")
 }
 
 /// Thanh toán

@@ -48,6 +48,7 @@ const stocktakes = () => import('@/features/stocktake/StocktakePages');
 const adminScreens: Record<string, Pick<RouteObject, 'lazy'> & { staff?: boolean }> = {
   me: { ...lazyComponent(() => import('@/auth/MyAccountPage'), 'MyAccountPage'), staff: true },
   'menu/dishes': lazyComponent(() => import('@/features/catalog/DishesPage'), 'DishesPage'),
+  'menu/options': lazyComponent(() => import('@/features/catalog/OptionGroupsPage'), 'OptionGroupsPage'),
   'menu/ingredients': lazyComponent(() => import('@/features/catalog/IngredientsPage'), 'IngredientsPage'),
   'menu/cost-sheet': lazyComponent(() => import('@/features/pricing/PricingPages'), 'CostSheetPage'),
   'menu/price-alerts': lazyComponent(() => import('@/features/pricing/PricingPages'), 'PriceAlertsPage'),

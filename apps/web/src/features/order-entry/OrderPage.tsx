@@ -9,8 +9,10 @@ import { client, errorMessage, ok } from '@/lib/api-client';
 import { money } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { usePos } from '@/pos/context';
-import { useMenu, useOrder } from '@/pos/data';
+import { needsPicker } from '@ketoan/api/domain';
+import { dishGroups, useMenu, useOptionGroups, useOrder } from '@/pos/data';
 import { OrderPanel } from '@/pos/OrderPanel';
+import { OptionPickerDialog } from '@/pos/OptionPicker';
 
 const TILES = [
   ['#eef4fe', '#3573dd'],
@@ -40,6 +42,21 @@ export function OrderPage() {
   const channel = order?.channel ?? (target && 'draft' in target ? target.draft.channel : 'DINE_IN');
   const appId = order?.deliveryAppId ?? (target && 'draft' in target ? target.draft.deliveryAppId : null);
   const menu = useMenu(channel);
+  const optionGroups = useOptionGroups();
+  const [picking, setPicking] = useState<DishDto | null>(null);
+  /** Dish price for this order (before options). */
+  const priceOf = (d: DishDto) =>
+    channel === 'APP'
+      ? (d.appPrices.find((p) => p.deliveryAppId === appId)?.price ?? d.appPrice)
+      : d.storePrice;
+  /** A dish whose required options have no default opens the picker; others go straight in. */
+  const tap = (d: DishDto) => {
+    // Options not loaded yet: ask rather than guess (the picker fills in once they arrive).
+    if (d.optionGroupIds.length && !optionGroups.data) return setPicking(d);
+    const groups = dishGroups(optionGroups.data, d.optionGroupIds);
+    if (needsPicker(groups)) setPicking(d);
+    else addDish(d.id);
+  };
   const [cat, setCat] = useState<number | null>(null);
   const [showPanel, setShowPanel] = useState(false);
   const toast = useToast();
@@ -146,9 +163,9 @@ export function OrderPage() {
                   dish={d}
                   qty={inOrder.get(d.id) ?? 0}
                   colors={TILES[i % 4]!}
-                  onAdd={() => addDish(d.id)}
+                  onAdd={() => tap(d)}
                   onLongPress={() => toggleSoldOut(d)}
-                  appId={channel === 'APP' ? (appId ?? null) : undefined}
+                  price={priceOf(d)}
                 />
               ))}
               {menu.isSuccess && shown.length === 0 && (
@@ -192,6 +209,20 @@ export function OrderPage() {
           onClose={showPanel ? () => setShowPanel(false) : undefined}
         />
       </div>
+      {picking && (
+        <OptionPickerDialog
+          // Remount once the groups arrive so their defaults are pre-selected.
+          key={optionGroups.data ? 'ready' : 'loading'}
+          dish={picking}
+          price={priceOf(picking) ?? '0'}
+          groups={dishGroups(optionGroups.data, picking.optionGroupIds)}
+          onClose={() => setPicking(null)}
+          onAdd={(ids, qty) => {
+            addDish(picking.id, qty, ids);
+            setPicking(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -228,22 +259,18 @@ function DishTile({
   colors,
   onAdd,
   onLongPress,
-  appId,
+  price,
 }: {
   dish: DishDto;
   qty: number;
   colors: readonly [string, string];
   onAdd: () => void;
   onLongPress: () => void;
-  /** Set for an app order (null = app not chosen yet): price the tile for that app. */
-  appId?: number | null;
+  /** Price on this order's channel / app, before options. */
+  price: string | null;
 }) {
   const timer = useRef<number | null>(null);
   const long = useRef(false);
-  const price =
-    appId === undefined
-      ? dish.storePrice
-      : (dish.appPrices.find((p) => p.deliveryAppId === appId)?.price ?? dish.appPrice);
   const start = () => {
     long.current = false;
     timer.current = window.setTimeout(() => {

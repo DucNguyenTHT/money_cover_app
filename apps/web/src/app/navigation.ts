@@ -1,5 +1,6 @@
 import type { Role } from '@ketoan/api/domain';
 import {
+  ListPlus,
   BarChart3,
   Bike,
   BookOpen,
@@ -68,6 +69,7 @@ export const NAV: NavModule[] = [
         title: 'Thực đơn',
         items: [
           { label: 'Món & nhóm món', icon: BookOpen, path: '/admin/menu/dishes' },
+          { label: 'Tuỳ chọn món', icon: ListPlus, path: '/admin/menu/options' },
           { label: 'Nguyên liệu', icon: Boxes, path: '/admin/menu/ingredients' },
         ],
       },

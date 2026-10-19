@@ -221,7 +221,7 @@ async function plan(kind: ImportKind, rows: ParsedRow[]): Promise<Planned[]> {
     const existing = new Map(
       (
         await prisma.ingredient.findMany({
-          include: { _count: { select: { lots: true, recipeItems: true } } },
+          include: { _count: { select: { lots: true, recipeItems: true, optionItems: true } } },
         })
       ).map((i) => [i.code.toLowerCase(), i]),
     );
@@ -252,7 +252,7 @@ async function plan(kind: ImportKind, rows: ParsedRow[]): Promise<Planned[]> {
       if (
         prev &&
         !errors.length &&
-        (prev._count.lots > 0 || prev._count.recipeItems > 0) &&
+        (prev._count.lots > 0 || prev._count.recipeItems > 0 || prev._count.optionItems > 0) &&
         unitChange(prev, { ...data, recipeFactor: String(data.recipeFactor) })
       )
         errors.push('Đã có tồn kho / định mức: không đổi được đơn vị kho, đơn vị định mức, hệ số quy đổi');

@@ -104,5 +104,5 @@ export async function makeDish(request: APIRequestContext) {
     note: null,
     items: [{ ingredientId: ing.id, qty: '150', scope: 'ALL' }],
   });
-  return { dishName, ingredientName: `Bò e2e ${tag}`, ingredientId: ing.id, today };
+  return { dishId: dish.id, dishName, ingredientName: `Bò e2e ${tag}`, ingredientId: ing.id, today };
 }

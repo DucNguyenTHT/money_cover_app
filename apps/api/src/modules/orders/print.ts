@@ -7,6 +7,7 @@ import { logger } from '../../core/logger';
 import { socketRooms } from '../../contracts/socket-events';
 import type { BillDto, OrderDto, OrderItemDto } from '../../contracts/orders.contract';
 import type { Station } from '../../domain/enums';
+import { optionsLabel } from '../../domain/menu/options';
 
 const GS = 0x1d;
 const vnd = (v: string | number) => Math.round(Number(v)).toLocaleString('vi-VN');
@@ -75,6 +76,9 @@ export function kitchenTicket(
   ];
   for (const it of items) {
     parts.push(escpos.doubleOn, escpos.text(`${it.qty} x ${it.dishName}`), escpos.doubleOff);
+    // Size / toppings / requests: what the cook must do differently.
+    if (it.options.length)
+      parts.push(escpos.boldOn, escpos.text(`   + ${optionsLabel(it.options)}`), escpos.boldOff);
     if (it.note) parts.push(escpos.text(`   * ${it.note}`));
   }
   if (o.note) parts.push(escpos.text('-'.repeat(w)), escpos.text(`Ghi chu: ${o.note}`));
@@ -106,6 +110,7 @@ export function billTicket(b: BillDto, paperWidth: number, provisional: boolean)
   ];
   for (const it of o.items.filter((i) => i.status === 'ACTIVE')) {
     parts.push(escpos.text(it.dishName));
+    if (it.options.length) parts.push(escpos.text(`  (${optionsLabel(it.options)})`));
     parts.push(row(`  ${it.qty} x ${vnd(it.unitPrice)}`, vnd(it.amount)));
     if (Number(it.discountAmount) > 0) parts.push(row('  Giam gia', `-${vnd(it.discountAmount)}`));
   }

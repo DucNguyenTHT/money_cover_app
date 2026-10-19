@@ -6,9 +6,14 @@ import type { AuthUser } from '../../core/auth';
 import { socketRooms } from '../../contracts/socket-events';
 import type { KitchenItem } from '../../contracts/orders.contract';
 import type { Station } from '../../domain/enums';
+import { optionsLabel } from '../../domain/menu/options';
 import { whereOf } from './print';
 
-const include = { dish: true, order: { include: { table: true, deliveryApp: true } } } as const;
+const include = {
+  dish: true,
+  options: { orderBy: { id: 'asc' } },
+  order: { include: { table: true, deliveryApp: true } },
+} as const;
 type Row = Prisma.OrderItemGetPayload<{ include: typeof include }>;
 
 const toItem = (i: Row): KitchenItem => ({
@@ -24,6 +29,7 @@ const toItem = (i: Row): KitchenItem => ({
   }),
   dishName: i.dish.name,
   qty: i.qty,
+  options: optionsLabel(i.options),
   note: i.note,
   kitchenStatus: i.kitchenStatus,
   sentAt: (i.sentAt ?? new Date()).toISOString(),

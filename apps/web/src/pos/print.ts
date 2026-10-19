@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import type { BillDto, OrderDto, OrderItemDto } from '@ketoan/api/contracts';
 import { money } from '@/lib/format';
 import { whereLabel } from './data';
+import { optionsLabel } from '@ketoan/api/domain';
 
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -50,6 +51,7 @@ export async function billHtml(b: BillDto, provisional: boolean): Promise<string
         (
           i,
         ) => `<div class="item"><div>${esc(i.dishName)}${i.note ? ` <span class="s">(${esc(i.note)})</span>` : ''}</div>
+        ${i.options.length ? `<div class="s">  ${esc(optionsLabel(i.options))}</div>` : ''}
         <div class="row s"><span>${i.qty} × ${money(i.unitPrice)}</span><span>${money(i.amount)}</span></div>
         ${Number(i.discountAmount) > 0 ? `<div class="row s"><span>Giảm giá</span><span>−${money(i.discountAmount)}</span></div>` : ''}</div>`,
       )
@@ -74,7 +76,7 @@ export function kitchenHtml(o: OrderDto, items: OrderItemDto[], stationLabel: st
     <div class="c b">${esc(stationLabel)}</div>
     <h1>${esc(whereLabel(o))}</h1>
     <div class="c s">${esc(o.code)} · ${time(new Date().toISOString())}</div><hr>
-    ${items.map((i) => `<div class="k">${i.qty} × ${esc(i.dishName)}</div>${i.note ? `<div class="note">* ${esc(i.note)}</div>` : ''}`).join('')}
+    ${items.map((i) => `<div class="k">${i.qty} × ${esc(i.dishName)}</div>${i.options.length ? `<div class="note">+ ${esc(optionsLabel(i.options))}</div>` : ''}${i.note ? `<div class="note">* ${esc(i.note)}</div>` : ''}`).join('')}
     ${o.note ? `<hr><div>Ghi chú: ${esc(o.note)}</div>` : ''}`;
 }
 

@@ -43,6 +43,8 @@ export const dishSchema = dishInput.extend({
   appPrices: z.array(z.object({ deliveryAppId: z.number(), price: decimalString })),
   soldOut: z.boolean(),
   hasRecipe: z.boolean(),
+  /** Option groups of the dish, in POS order (definitions: listOptionGroups). */
+  optionGroupIds: z.array(z.number()),
 });
 export type DishDto = z.infer<typeof dishSchema>;
 
@@ -86,6 +88,56 @@ export const dishDetail = dishSchema.extend({
   recipes: z.array(recipeSchema),
 });
 export type DishDetail = z.infer<typeof dishDetail>;
+
+// ---- options (size, toppings, requests)
+
+const optionInput = z.object({
+  /** Existing option to update; null = new. */
+  id: z.number().int().nullable(),
+  name: z.string().trim().min(1, 'Nhập tên tuỳ chọn').max(60),
+  price: money,
+  recipeFactor: decimalString.refine((v) => Number(v) > 0 && Number(v) <= 10, 'Hệ số từ 0 đến 10'),
+  isDefault: z.boolean(),
+  active: z.boolean(),
+  sort: z.number().int(),
+  /** Extra ingredients per portion, in the ingredient's RECIPE unit (g, ml…). */
+  ingredients: z.array(
+    z.object({
+      ingredientId: z.number().int(),
+      qty: decimalString.refine((v) => Number(v) > 0, 'Số lượng phải lớn hơn 0'),
+    }),
+  ),
+});
+
+export const optionGroupInput = z.object({
+  name: z.string().trim().min(1, 'Nhập tên nhóm').max(60),
+  multi: z.boolean(),
+  required: z.boolean(),
+  maxSelect: z.number().int().min(1).nullable(),
+  sort: z.number().int(),
+  active: z.boolean(),
+  options: z.array(optionInput).min(1, 'Nhóm cần ít nhất 1 tuỳ chọn'),
+});
+
+export const optionGroupSchema = optionGroupInput.extend({
+  id: z.number(),
+  options: z.array(
+    optionInput.extend({
+      id: z.number(),
+      ingredients: z.array(
+        z.object({
+          ingredientId: z.number(),
+          ingredientName: z.string(),
+          recipeUnit: z.string(),
+          qty: decimalString,
+        }),
+      ),
+    }),
+  ),
+  /** Dishes using the group. */
+  dishCount: z.number(),
+});
+export type OptionGroupDto = z.infer<typeof optionGroupSchema>;
 
 export const menuContract = c.router(
   {
@@ -170,6 +222,37 @@ export const menuContract = c.router(
       body: z.object({ reason }),
       responses: { 200: dishDetail, ...commonErrors },
       metadata: admin,
+    },
+    listOptionGroups: {
+      method: 'GET',
+      path: '/api/option-groups',
+      responses: { 200: z.array(optionGroupSchema), ...commonErrors },
+      summary: 'Nhóm tuỳ chọn món (size, topping, yêu cầu)',
+    },
+    createOptionGroup: {
+      method: 'POST',
+      path: '/api/option-groups',
+      body: optionGroupInput,
+      responses: { 201: optionGroupSchema, ...commonErrors },
+      metadata: admin,
+    },
+    updateOptionGroup: {
+      method: 'PUT',
+      path: '/api/option-groups/:id',
+      pathParams: id,
+      body: optionGroupInput,
+      responses: { 200: optionGroupSchema, ...commonErrors },
+      metadata: admin,
+      summary: 'Sửa nhóm và các tuỳ chọn (tuỳ chọn đã bán bị bỏ khỏi danh sách thì chỉ ẩn đi)',
+    },
+    setDishOptionGroups: {
+      method: 'PUT',
+      path: '/api/dishes/:id/option-groups',
+      pathParams: id,
+      body: z.object({ groupIds: z.array(z.number().int()) }),
+      responses: { 200: dishDetail, ...commonErrors },
+      metadata: admin,
+      summary: 'Gắn nhóm tuỳ chọn cho món (theo thứ tự hiện trên POS)',
     },
     setAvailability: {
       method: 'PATCH',

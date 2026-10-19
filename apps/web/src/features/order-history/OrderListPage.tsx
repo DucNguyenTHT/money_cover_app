@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Printer, Trash2 } from 'lucide-react';
 import type { OrderDto, OrderSummary } from '@ketoan/api/contracts';
-import { businessDateOf, type Channel, type OrderStatus } from '@ketoan/api/domain';
+import { businessDateOf, optionsLabel, type Channel, type OrderStatus } from '@ketoan/api/domain';
 import { useAuth } from '@/auth/AuthProvider';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -336,6 +336,9 @@ function OrderBody({ o }: { o: OrderDto }) {
           >
             <span>
               {i.qty} × {i.dishName}
+              {i.options.length > 0 && (
+                <span className="text-xs text-muted"> · {optionsLabel(i.options)}</span>
+              )}
               {i.note && <span className="text-xs text-muted"> · {i.note}</span>}
               {i.status === 'CANCELLED' && (
                 <span className="block text-xs no-underline">

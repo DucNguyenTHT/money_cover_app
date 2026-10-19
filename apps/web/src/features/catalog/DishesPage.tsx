@@ -220,10 +220,12 @@ function useInvalidateMenu() {
     qc.invalidateQueries({ queryKey: ['pricing'] });
     qc.invalidateQueries({ queryKey: ['dish'] });
     qc.invalidateQueries({ queryKey: ['dish-categories'] });
+    qc.invalidateQueries({ queryKey: ['option-groups'] });
+    qc.invalidateQueries({ queryKey: ['pos', 'menu'] });
   };
 }
 
-type Tab = 'info' | 'prices' | 'recipe';
+type Tab = 'info' | 'prices' | 'recipe' | 'options';
 
 function DishEditor({
   id,
@@ -254,6 +256,7 @@ function DishEditor({
               { value: 'info', label: 'Thông tin' },
               { value: 'prices', label: 'Giá bán' },
               { value: 'recipe', label: 'Định mức' },
+              { value: 'options', label: 'Tuỳ chọn' },
             ]}
           />
         </div>
@@ -271,6 +274,7 @@ function DishEditor({
       {d && tab === 'info' && <InfoTab dish={d} categories={categories} />}
       {d && tab === 'prices' && <PricesTab dish={d} />}
       {d && tab === 'recipe' && <RecipeTab dish={d} />}
+      {d && tab === 'options' && <OptionsTab dish={d} />}
     </Dialog>
   );
 }
@@ -979,5 +983,100 @@ function CategoriesDialog({ categories, onClose }: { categories: CategoryDto[]; 
         </div>
       )}
     </Dialog>
+  );
+}
+
+/** Which option groups (size, toppings, requests) the dish uses, in the order the POS shows them. */
+function OptionsTab({ dish }: { dish: DishDetail }) {
+  const toast = useToast();
+  const invalidate = useInvalidateMenu();
+  const groups = useQuery({
+    queryKey: ['option-groups'],
+    queryFn: async () => ok(await client.menu.listOptionGroups()),
+  });
+  const [picked, setPicked] = useState<number[]>(dish.optionGroupIds);
+  const save = useMutation({
+    mutationFn: async () =>
+      ok(await client.menu.setDishOptionGroups({ params: { id: dish.id }, body: { groupIds: picked } })),
+    onSuccess: () => {
+      toast('Đã lưu tuỳ chọn của món');
+      invalidate();
+    },
+  });
+  const move = (id: number, by: number) =>
+    setPicked((p) => {
+      const i = p.indexOf(id);
+      const j = i + by;
+      if (j < 0 || j >= p.length) return p;
+      const next = [...p];
+      [next[i], next[j]] = [next[j]!, next[i]!];
+      return next;
+    });
+  const all = groups.data ?? [];
+  const ordered = [
+    ...picked.flatMap((id) => all.filter((g) => g.id === id)),
+    ...all.filter((g) => !picked.includes(g.id)),
+  ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[13px] text-muted">
+        Chọn các nhóm tuỳ chọn cho món này (size, topping, yêu cầu). Tạo / sửa nhóm ở{' '}
+        <Link className="text-primary-ink underline" to="/admin/menu/options">
+          Thực đơn → Tuỳ chọn món
+        </Link>
+        .
+      </p>
+      {groups.data && all.length === 0 ? (
+        <EmptyState title="Chưa có nhóm tuỳ chọn nào" hint="Tạo nhóm ở Thực đơn → Tuỳ chọn món trước." />
+      ) : (
+        <ul className="overflow-hidden rounded-card border border-line">
+          {ordered.map((g) => {
+            const on = picked.includes(g.id);
+            return (
+              <li
+                key={g.id}
+                className="flex items-center gap-3 border-t border-line px-3 py-2.5 first:border-t-0"
+              >
+                <input
+                  type="checkbox"
+                  aria-label={`Dùng nhóm ${g.name}`}
+                  className="size-4 accent-primary"
+                  checked={on}
+                  onChange={(e) =>
+                    setPicked((p) => (e.target.checked ? [...p, g.id] : p.filter((x) => x !== g.id)))
+                  }
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium">{g.name}</span> {!g.active && <Badge>Ngừng dùng</Badge>}
+                  <span className="block truncate text-xs text-muted">
+                    {g.options
+                      .filter((o) => o.active)
+                      .map((o) => (Number(o.price) > 0 ? `${o.name} +${money(o.price)}` : o.name))
+                      .join(' · ')}
+                  </span>
+                </span>
+                {on && (
+                  <span className="flex gap-1">
+                    <IconButton label={`Đưa ${g.name} lên`} size={30} onClick={() => move(g.id, -1)}>
+                      ↑
+                    </IconButton>
+                    <IconButton label={`Đưa ${g.name} xuống`} size={30} onClick={() => move(g.id, 1)}>
+                      ↓
+                    </IconButton>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <FormError message={save.error ? errorMessage(save.error) : null} />
+      <div className="flex justify-end">
+        <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
+          Lưu tuỳ chọn
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -21,6 +21,7 @@ import { businessToday } from '../settings/settings.service';
 const dishInclude = {
   category: true,
   prices: { orderBy: { effectiveFrom: 'desc' } },
+  optionGroups: { orderBy: { sort: 'asc' } },
   recipes: {
     orderBy: { effectiveFrom: 'desc' },
     include: { items: { include: { ingredient: true } }, _count: { select: { orderItems: true } } },
@@ -60,6 +61,7 @@ function toDish(d: DishRow, date: string, today: string): DishDto {
     appPrices: ownAppPrices(prices, date),
     soldOut: !!d.soldOutDate && fromDbDate(d.soldOutDate) === today,
     hasRecipe: !!pickVersion(versions, date),
+    optionGroupIds: d.optionGroups.map((g) => g.groupId),
   };
 }
 

@@ -107,7 +107,7 @@ export function BackupSection({ s, setS }: { s: Settings; setS: (s: Settings) =>
                 Lần chạy {when(last.at)} bị lỗi: {last.error}
               </span>
             )}
-            <span className="opacity-80">Lần tự động tiếp theo: {when(b.nextAt)}</span>
+            <span>Lần tự động tiếp theo: {when(b.nextAt)}</span>
           </div>
         </div>
       )}

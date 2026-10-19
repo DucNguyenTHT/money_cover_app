@@ -28,6 +28,13 @@ import { checkPayments } from '../../domain/orders/payment';
 import { cancelRule, orderCode } from '../../domain/orders/cancel-policy';
 import { itemCosts } from '../../domain/orders/item-cost';
 import { consumption, pickVersion } from '../../domain/recipes/recipes';
+import {
+  defaultOptionIds,
+  resolveOptions,
+  type OptionGroupDef,
+  type ResolvedOptions,
+} from '../../domain/menu/options';
+import { groupsForDishes } from '../menu/options.service';
 import { vietQrConfigured, vietQrPayload } from '../../domain/vietqr';
 import { businessToday, getSettings, getView } from '../settings/settings.service';
 import { verifyApproverPin } from '../auth/auth.service';
@@ -43,7 +50,10 @@ type Approval = z.infer<typeof approvalSchema>;
 const include = {
   table: { include: { area: true } },
   deliveryApp: true,
-  items: { include: { dish: true }, orderBy: { id: 'asc' } },
+  items: {
+    include: { dish: true, options: { orderBy: { id: 'asc' } }, extras: true },
+    orderBy: { id: 'asc' },
+  },
   payments: { orderBy: { id: 'asc' } },
 } as const;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof include }>;
@@ -66,7 +76,14 @@ function toItem(i: OrderRow['items'][number]): OrderItemDto {
     dishName: i.dish.name,
     station: i.station,
     qty: i.qty,
+    basePrice: i.basePrice.toString(),
     unitPrice: i.unitPrice.toString(),
+    options: i.options.map((o) => ({
+      optionId: o.optionId,
+      groupName: o.groupName,
+      name: o.name,
+      price: o.price.toString(),
+    })),
     discountAmount: i.discountAmount.toString(),
     discountReason: i.discountReason,
     amount: i.amount.toString(),
@@ -349,11 +366,43 @@ async function nextCode(tx: Tx, branchId: number, date: string) {
   return orderCode(date, row!.last_no);
 }
 
+/** Options of a new / edited line, checked against the dish's groups (their defaults when not given). */
+function lineOptions(groups: OptionGroupDef[], optionIds: number[] | undefined, dishName: string) {
+  const r = resolveOptions(groups, optionIds ?? defaultOptionIds(groups));
+  if ('error' in r) throw badRequest(`${dishName}: ${r.error}`);
+  return r;
+}
+
+/** Snapshot of the chosen options and their extra ingredients, as nested creates of a line. */
+const optionRows = (r: ResolvedOptions) => ({
+  options: {
+    create: r.chosen.map((c) => ({
+      optionId: c.optionId,
+      groupName: c.groupName,
+      name: c.name,
+      price: c.price.toString(),
+    })),
+  },
+  extras: {
+    create: r.extras.map((e) => ({ ingredientId: e.ingredientId, qty: e.qty.toDecimalPlaces(4).toString() })),
+  },
+});
+
+/** Create data copying a line (another qty / order): its option and extra snapshots come along. */
+function copyLine(it: OrderRow['items'][number]) {
+  const { id: _id, dish: _dish, options, extras, ...rest } = it;
+  return {
+    ...rest,
+    options: { create: options.map(({ id: _o, orderItemId: _i, ...o }) => o) },
+    extras: { create: extras.map(({ id: _e, orderItemId: _i, ...e }) => e) },
+  };
+}
+
 /** Add dishes to an open order at the price for its channel (and delivery app) and business date. */
 async function addItemsTx(
   tx: Tx,
   o: { id: number; channel: Channel; deliveryAppId: number | null; businessDate: Date },
-  items: { dishId: number; qty: number; note?: string | null }[],
+  items: { dishId: number; qty: number; note?: string | null; optionIds?: number[] }[],
 ) {
   const date = fromDbDate(o.businessDate);
   const today = await businessToday(tx);
@@ -364,6 +413,10 @@ async function addItemsTx(
   const existing = await tx.orderItem.findMany({
     where: { orderId: o.id, status: 'ACTIVE', kitchenStatus: 'NEW' },
   });
+  const groups = await groupsForDishes(
+    tx,
+    dishes.map((d) => d.id),
+  );
   for (const it of items) {
     const d = dishes.find((x) => x.id === it.dishId);
     if (!d || !d.active) throw badRequest('Món không tồn tại hoặc đã ngừng bán');
@@ -375,8 +428,16 @@ async function addItemsTx(
       date,
     );
     const note = it.note?.trim() || null;
+    const opts = lineOptions(groups.get(d.id) ?? [], it.optionIds, d.name);
+    const unitPrice = D(price).add(opts.price);
+    // Same dish, options, note and price, no discount: one line with a higher qty.
     const same = existing.find(
-      (e) => e.dishId === d.id && e.note === note && e.discountAmount.isZero() && e.unitPrice.equals(price),
+      (e) =>
+        e.dishId === d.id &&
+        e.note === note &&
+        e.optionsKey === opts.key &&
+        e.discountAmount.isZero() &&
+        e.unitPrice.equals(unitPrice.toString()),
     );
     if (same) {
       same.qty += it.qty;
@@ -390,9 +451,13 @@ async function addItemsTx(
         recipeId: recipe?.id ?? null,
         station: d.category.station,
         qty: it.qty,
-        unitPrice: price,
-        amount: roundVnd(D(price.toString()).mul(it.qty)).toString(),
+        basePrice: price,
+        unitPrice: unitPrice.toString(),
+        recipeFactor: opts.factor.toString(),
+        optionsKey: opts.key,
+        amount: roundVnd(unitPrice.mul(it.qty)).toString(),
         note,
+        ...optionRows(opts),
       },
     });
     existing.push(created);
@@ -477,7 +542,7 @@ export const update = (
 export const addItems = (
   id: number,
   version: number,
-  items: { dishId: number; qty: number; note?: string | null }[],
+  items: { dishId: number; qty: number; note?: string | null; optionIds?: number[] }[],
 ) => mutate(id, version, (tx, o) => addItemsTx(tx, o, items));
 
 function findItem(o: OrderRow, itemId: number) {
@@ -494,6 +559,7 @@ export function updateItem(
     version: number;
     qty?: number;
     note?: string | null;
+    optionIds?: number[];
     discountAmount?: string;
     discountReason?: string | null;
     approval?: Approval;
@@ -508,10 +574,27 @@ export function updateItem(
     const data: Prisma.OrderItemUpdateInput = {};
     if (b.qty !== undefined) data.qty = b.qty;
     if (b.note !== undefined) data.note = b.note || null;
+    let unitPrice = D(it.unitPrice.toString());
+    if (b.optionIds !== undefined) {
+      const groups = (await groupsForDishes(tx, [it.dishId])).get(it.dishId) ?? [];
+      const opts = lineOptions(groups, b.optionIds, it.dish.name);
+      if (opts.key !== it.optionsKey) {
+        if (it.kitchenStatus !== 'NEW')
+          throw conflict('ITEM_SENT', 'Món đã gửi bếp — không đổi tuỳ chọn được, hãy huỷ món và gọi lại');
+        unitPrice = D(it.basePrice.toString()).add(opts.price);
+        Object.assign(data, {
+          unitPrice: unitPrice.toString(),
+          recipeFactor: opts.factor.toString(),
+          optionsKey: opts.key,
+          options: { deleteMany: {}, ...optionRows(opts).options },
+          extras: { deleteMany: {}, ...optionRows(opts).extras },
+        });
+      }
+    }
     let discountChanged = false;
     if (b.discountAmount !== undefined) {
       const amount = roundVnd(b.discountAmount);
-      const lineAmount = D(it.unitPrice.toString()).mul(b.qty ?? it.qty);
+      const lineAmount = unitPrice.mul(b.qty ?? it.qty);
       if (amount.gt(lineAmount)) throw badRequest('Giảm giá lớn hơn tiền món');
       if (amount.gt(0) && !b.discountReason?.trim()) throw badRequest('Nhập lý do giảm giá');
       data.discountAmount = amount.toString();
@@ -565,10 +648,9 @@ export async function cancelItem(
     };
     if (qty < it.qty) {
       await tx.orderItem.update({ where: { id: it.id }, data: { qty: it.qty - qty } });
-      const { id: _id, dish: _dish, ...copy } = it;
       await tx.orderItem.create({
         data: {
-          ...copy,
+          ...copyLine(it),
           qty,
           amount: roundVnd(D(it.unitPrice.toString()).mul(qty)).toString(),
           discountAmount: 0,
@@ -811,9 +893,8 @@ export async function split(
       if (qty === it.qty) {
         await tx.orderItem.update({ where: { id: it.id }, data: { orderId: created.id } });
       } else {
-        const { id: _id, dish: _dish, ...copy } = it;
         await tx.orderItem.create({
-          data: { ...copy, orderId: created.id, qty, discountAmount: share.toString() },
+          data: { ...copyLine(it), orderId: created.id, qty, discountAmount: share.toString() },
         });
         await tx.orderItem.update({
           where: { id: it.id },
@@ -867,8 +948,17 @@ export async function split(
 
 // ---------------------------------------------------------------- payment & stock
 
-/** Recipe lines (stock units) of each active line, for the order's channel. */
-async function usageByLine(tx: Tx, items: { recipeId: number | null; qty: number }[], channel: Channel) {
+/** Ingredients (stock units) of each line for the order's channel: recipe × size factor + option extras. */
+async function usageByLine(
+  tx: Tx,
+  items: {
+    recipeId: number | null;
+    qty: number;
+    recipeFactor: Prisma.Decimal;
+    extras: { ingredientId: number; qty: Prisma.Decimal }[];
+  }[],
+  channel: Channel,
+) {
   const recipeIds = [...new Set(items.map((i) => i.recipeId).filter((x): x is number => x != null))];
   const recipeItems = recipeIds.length
     ? await tx.dishRecipeItem.findMany({ where: { recipeId: { in: recipeIds } } })
@@ -881,6 +971,8 @@ async function usageByLine(tx: Tx, items: { recipeId: number | null; qty: number
         recipe: recipeItems
           .filter((r) => r.recipeId === i.recipeId)
           .map((r) => ({ ingredientId: r.ingredientId, qty: r.qty.toString(), scope: r.scope })),
+        factor: i.recipeFactor.toString(),
+        extras: i.extras.map((e) => ({ ingredientId: e.ingredientId, qty: e.qty.toString() })),
       },
     ]),
   );
@@ -890,7 +982,7 @@ async function usageByLine(tx: Tx, items: { recipeId: number | null; qty: number
 async function applySaleCosts(tx: Tx, orderId: number) {
   const o = await tx.order.findUniqueOrThrow({
     where: { id: orderId },
-    include: { items: { where: { status: 'ACTIVE' }, orderBy: { id: 'asc' } } },
+    include: { items: { where: { status: 'ACTIVE' }, orderBy: { id: 'asc' }, include: { extras: true } } },
   });
   const issue = await tx.issue.findFirst({
     where: { orderId, reason: 'SALE_USE' },
@@ -920,7 +1012,10 @@ onIssueCostsChanged(async (tx, issueIds) => {
 /** Cancelled-but-cooked lines become DISPOSAL issues (one per line, linked to it), once. */
 async function issueWasted(tx: Tx, orderId: number, userId: number) {
   const o = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
-  const wasted = await tx.orderItem.findMany({ where: { orderId, wasted: true }, include: { dish: true } });
+  const wasted = await tx.orderItem.findMany({
+    where: { orderId, wasted: true },
+    include: { dish: true, extras: true },
+  });
   if (!wasted.length) return;
   const done = new Set(
     (

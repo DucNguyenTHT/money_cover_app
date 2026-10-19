@@ -454,15 +454,32 @@ export async function daily(from: string, to: string): Promise<DailyRow[]> {
 export async function sales(from: string, to: string): Promise<SalesReport> {
   const branchId = await defaultBranchId();
   const args = [branchId, day(from), day(to)] as const;
-  const [hours, channels, methods, tables, staff, dishes] = await Promise.all([
+  const [hours, channels, methods, tables, staff, dishes, options] = await Promise.all([
     prisma.$queryRawTyped(reportByHour(...args)),
     prisma.$queryRawTyped(reportChannels(...args)),
     prisma.$queryRawTyped(reportPayments(...args)),
     prisma.$queryRawTyped(reportByTable(...args)),
     prisma.$queryRawTyped(reportByStaff(...args)),
     prisma.$queryRawTyped(reportDishProfit(...args, null)),
+    // Grouped by name as sold (the option may since have been renamed or removed).
+    prisma.$queryRaw<{ group_name: string; name: string; qty: bigint; amount: Prisma.Decimal }[]>`
+      SELECT op.group_name, op.name, SUM(oi.qty) AS qty, SUM(oi.qty * op.price) AS amount
+      FROM order_item_options op
+      JOIN order_items oi ON oi.id = op.order_item_id
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.branch_id = ${branchId} AND o.status = 'PAID' AND oi.status = 'ACTIVE'
+        AND o.business_date BETWEEN ${day(from)}::date AND ${day(to)}::date
+      GROUP BY op.group_name, op.name
+      ORDER BY SUM(oi.qty) DESC
+      LIMIT 30`,
   ]);
   return {
+    topOptions: options.map((x) => ({
+      groupName: x.group_name,
+      name: x.name,
+      qty: Number(x.qty),
+      amount: x.amount.toString(),
+    })),
     byHour: hours.map((h) => ({ hour: n(h.hour), orders: n(h.orders), netRevenue: m(h.net_revenue) })),
     byChannel: channels.map((c) => ({
       key: c.channel ?? '',

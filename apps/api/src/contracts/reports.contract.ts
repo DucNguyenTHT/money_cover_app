@@ -102,6 +102,8 @@ export const salesSchema = z.object({
   byTable: z.array(amountRow),
   byStaff: z.array(amountRow.extend({ discounts: money })),
   topDishes: z.array(z.object({ dishId: z.number(), name: z.string(), qty: z.number(), netRevenue: money })),
+  /** Options sold (size, toppings, requests): portions and their added price (before discounts). */
+  topOptions: z.array(z.object({ groupName: z.string(), name: z.string(), qty: z.number(), amount: money })),
 });
 export type SalesReport = z.infer<typeof salesSchema>;
 

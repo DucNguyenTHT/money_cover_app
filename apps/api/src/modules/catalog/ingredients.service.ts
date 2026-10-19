@@ -7,8 +7,8 @@ import type { IngredientDto, ingredientInput } from '../../contracts/catalog.con
 
 type Input = z.infer<typeof ingredientInput>;
 
-const usage = { _count: { select: { lots: true, recipeItems: true } } } as const;
-type WithUsage = Ingredient & { _count: { lots: number; recipeItems: number } };
+const usage = { _count: { select: { lots: true, recipeItems: true, optionItems: true } } } as const;
+type WithUsage = Ingredient & { _count: { lots: number; recipeItems: number; optionItems: number } };
 
 export const toIngredientDto = (i: WithUsage): IngredientDto => ({
   id: i.id,
@@ -22,7 +22,7 @@ export const toIngredientDto = (i: WithUsage): IngredientDto => ({
   purchaseFactor: i.purchaseFactor.toString(),
   category: i.category,
   active: i.active,
-  unitsLocked: i._count.lots > 0 || i._count.recipeItems > 0,
+  unitsLocked: i._count.lots > 0 || i._count.recipeItems > 0 || i._count.optionItems > 0,
 });
 
 /** Units that give meaning to stored quantities (stock in `unit`, recipes converted with `recipeFactor`). */
@@ -38,7 +38,7 @@ export function unitChange(
 }
 
 export const UNITS_LOCKED_MESSAGE =
-  'Nguyên liệu đã có tồn kho hoặc nằm trong định mức nên không đổi được đơn vị kho, đơn vị định mức và hệ số quy đổi (số tồn và định mức đang tính theo đơn vị cũ). Hãy tạo nguyên liệu mới nếu cần đơn vị khác.';
+  'Nguyên liệu đã có tồn kho hoặc nằm trong định mức / tuỳ chọn món nên không đổi được đơn vị kho, đơn vị định mức và hệ số quy đổi (số tồn và định mức đang tính theo đơn vị cũ). Hãy tạo nguyên liệu mới nếu cần đơn vị khác.';
 
 export async function list(q?: string, active?: boolean) {
   const where: Prisma.IngredientWhereInput = {

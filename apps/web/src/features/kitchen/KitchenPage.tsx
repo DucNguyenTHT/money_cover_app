@@ -337,6 +337,9 @@ function Rows({
               >
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-semibold">{i.dishName}</span>
+                  {i.options && (
+                    <span className="text-[13px] font-semibold text-primary-ink">{i.options}</span>
+                  )}
                   {i.note && <span className="text-[13px] text-warn">{i.note}</span>}
                   {/* Narrow columns (tablets): where it goes sits under the dish name. */}
                   {view === 'dish' && (

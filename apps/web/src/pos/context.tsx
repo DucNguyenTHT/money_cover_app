@@ -25,8 +25,11 @@ interface PosState {
   setTarget: (t: PosTarget) => void;
   search: string;
   setSearch: (s: string) => void;
-  /** Add one portion of a dish to the target (creates the order on the first dish). Calls are queued. */
-  addDish: (dishId: number, qty?: number) => void;
+  /**
+   * Add portions of a dish to the target (creates the order on the first dish). Calls are queued.
+   * optionIds omitted = the dish's default options.
+   */
+  addDish: (dishId: number, qty?: number, optionIds?: number[]) => void;
   pending: number;
 }
 
@@ -64,7 +67,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addDish = useCallback(
-    (dishId: number, qty = 1) => {
+    (dishId: number, qty = 1, optionIds?: number[]) => {
       setPending((n) => n + 1);
       chain.current = chain.current
         .then(async () => {
@@ -77,7 +80,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
             ok(
               await client.orders.addItems({
                 params: { id: order.id },
-                body: { version: order.version, items: [{ dishId, qty }] },
+                body: { version: order.version, items: [{ dishId, qty, optionIds }] },
               }),
             );
           let o: OrderDto;
@@ -92,7 +95,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
                   appOrderCode: d.appOrderCode,
                   guestCount: 1,
                   note: null,
-                  items: [{ dishId, qty }],
+                  items: [{ dishId, qty, optionIds }],
                 },
               }),
             );
