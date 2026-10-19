@@ -14,6 +14,13 @@ export const telegramError = (message: string, details?: unknown) =>
 /** The bot token is no longer accepted (revoked in @BotFather, or mistyped). */
 export class BadTokenError extends Error {}
 
+/** Too many messages (bots: about 1 per second per chat, 20 per minute per group): wait `seconds`. */
+export class RateLimitError extends Error {
+  constructor(readonly seconds: number) {
+    super(`Telegram yêu cầu chờ ${seconds} giây`);
+  }
+}
+
 async function call<T>(token: string, method: string, body?: FormData | Record<string, unknown>): Promise<T> {
   let res: Response;
   try {
@@ -26,8 +33,14 @@ async function call<T>(token: string, method: string, body?: FormData | Record<s
   } catch {
     throw telegramError('Không kết nối được Telegram — kiểm tra Internet của máy chủ');
   }
-  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    result?: T;
+    description?: string;
+    parameters?: { retry_after?: number };
+  };
   if (res.status === 401 || res.status === 404) throw new BadTokenError(json.description ?? 'Unauthorized');
+  if (res.status === 429) throw new RateLimitError(json.parameters?.retry_after ?? 30);
   if (!json.ok) throw telegramError(`Telegram báo lỗi: ${json.description ?? res.status}`, json);
   return json.result as T;
 }
@@ -79,14 +92,20 @@ export const sendMessage = (token: string, chatId: string, text: string) =>
   call(token, 'sendMessage', { chat_id: chatId, text });
 
 /** Send a file from disk as a document (streamed from disk by openAsBlob). */
-export async function sendDocument(token: string, chatId: string, file: string, caption: string) {
+export async function sendDocument(
+  token: string,
+  chatId: string,
+  file: string,
+  caption: string,
+  fileName = path.basename(file),
+) {
   const { size } = await stat(file);
   if (size > MAX_UPLOAD)
     throw telegramError(`File ${Math.round(size / 1024 / 1024)} MB vượt giới hạn 50 MB của bot Telegram`);
   const form = new FormData();
   form.set('chat_id', chatId);
-  form.set('caption', caption);
-  form.set('document', await openAsBlob(file), path.basename(file));
+  form.set('caption', caption.slice(0, 1024));
+  form.set('document', await openAsBlob(file), fileName);
   const msg = await call<{ message_id: number }>(token, 'sendDocument', form);
   return { messageId: msg.message_id, size };
 }

@@ -41,6 +41,8 @@ export function BackupSection({ s, setS }: { s: Settings; setS: (s: Settings) =>
   const status = useQuery({
     queryKey: ['backups'],
     queryFn: async () => ok(await client.backups.status()),
+    // Invoice files go out in the background after a backup: follow until done.
+    refetchInterval: (q) => (q.state.data?.documents.running ? 5000 : false),
   });
   const run = useMutation({
     mutationFn: async () => ok(await client.backups.run({ body: {} })),
@@ -141,6 +143,28 @@ export function BackupSection({ s, setS }: { s: Settings; setS: (s: Settings) =>
                   {last.telegram.ok
                     ? `Đã gửi bản ${when(last.at)}`
                     : `Chưa gửi được qua Telegram: ${last.telegram.error}`}
+                </p>
+              )}
+              <Switch
+                checked={s.backup_telegram_documents}
+                onChange={(v) => setS({ ...s, backup_telegram_documents: v })}
+                label="Gửi cả ảnh / file chứng từ"
+                description="Mỗi file chứng từ mới gửi một lần, kèm ngày, đối tác, số hoá đơn để tìm lại trên Telegram"
+              />
+              {s.backup_telegram_documents && (b.documents.running || b.documents.last) && (
+                <p
+                  className={cn('text-xs', b.documents.last?.error ? 'text-warn' : 'text-faint')}
+                  aria-live="polite"
+                >
+                  <Send size={12} className="mr-1 inline" />
+                  {b.documents.running
+                    ? 'Đang gửi chứng từ…'
+                    : b.documents.last!.error
+                      ? `Gửi chứng từ bị dừng: ${b.documents.last!.error}. Còn ${b.documents.last!.pending} file, lần sao lưu sau gửi tiếp`
+                      : `Lần ${when(b.documents.last!.at)}: gửi ${b.documents.last!.sent} file` +
+                        (b.documents.last!.pending
+                          ? `, còn ${b.documents.last!.pending} file gửi dần các lần sau`
+                          : ', đã gửi hết')}
                 </p>
               )}
             </div>

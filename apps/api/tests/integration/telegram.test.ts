@@ -2,7 +2,8 @@ import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../../src/core/db';
-import { makeUser, resetDb, startServer, stopServer } from '../helpers/harness';
+import { documentsIdle } from '../../src/modules/backup/backup.service';
+import { clientFor, makeUser, resetDb, startServer, stopServer } from '../helpers/harness';
 
 const TOKEN = '123456789:AAHfake-token-for-tests-0123456789abcd';
 
@@ -15,9 +16,16 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 /** Fake Telegram Bot API: records what the bot sent. */
-function mockTelegram(opts: { tokenOk?: boolean; sendFails?: boolean } = {}) {
+function mockTelegram(opts: { tokenOk?: boolean; sendFails?: boolean; failFile?: string } = {}) {
   const realFetch = globalThis.fetch;
-  const sent: { method: string; chatId: string; text?: string; fileName?: string; bytes?: number }[] = [];
+  const sent: {
+    method: string;
+    chatId: string;
+    text?: string;
+    fileName?: string;
+    bytes?: number;
+    caption?: string;
+  }[] = [];
   const json = (v: unknown, status = 200) =>
     new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json' } });
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -51,7 +59,15 @@ function mockTelegram(opts: { tokenOk?: boolean; sendFails?: boolean } = {}) {
       if (opts.sendFails) return json({ ok: false, description: 'Bad Request: chat not found' }, 400);
       const form = init?.body as FormData;
       const doc = form.get('document') as File;
-      sent.push({ method, chatId: String(form.get('chat_id')), fileName: doc.name, bytes: doc.size });
+      if (doc.name === opts.failFile)
+        return json({ ok: false, description: 'Bad Request: file rejected' }, 400);
+      sent.push({
+        method,
+        chatId: String(form.get('chat_id')),
+        fileName: doc.name,
+        bytes: doc.size,
+        caption: String(form.get('caption')),
+      });
       return json({ ok: true, result: { message_id: 2 } });
     }
     return json({ ok: false, description: 'unexpected ' + method }, 400);
@@ -132,5 +148,120 @@ describe('Telegram backup destination', () => {
     expect(bad.status).toBe(400);
     expect(JSON.stringify(bad.body)).toContain('Telegram không nhận mã bot');
     expect((await staff.client.telegram.status()).status).toBe(403);
+  });
+});
+
+type Client = ReturnType<typeof clientFor>;
+const jpeg = (seed: string) =>
+  Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`JFIF ${seed} `.repeat(20))]).toString(
+    'base64',
+  );
+
+async function fileDocument(client: Client, partner: string, fileName: string) {
+  const doc = await client.documents.create({
+    body: {
+      kind: 'PURCHASE',
+      date: '2026-10-03',
+      number: '0004512',
+      partner,
+      amount: '1250000',
+      note: null,
+      receiptId: null,
+    },
+  });
+  const id = (doc.body as { id: number }).id;
+  await client.documents.addFile({
+    params: { id },
+    body: { name: fileName, dataBase64: jpeg(fileName), thumbBase64: null },
+  });
+}
+
+describe('invoice files to Telegram', () => {
+  async function ready() {
+    const { client } = await makeUser({ username: 'chu', role: 'ADMIN' });
+    mockTelegram();
+    await client.telegram.saveToken({ body: { botToken: TOKEN } });
+    await client.telegram.setChat({ body: { chatId: '555', title: 'Chủ Quán' } });
+    return client;
+  }
+  const docsSent = <T extends { method: string; fileName?: string }>(sent: T[]) =>
+    sent.filter((x) => x.method === 'sendDocument' && !x.fileName!.endsWith('.dump'));
+
+  it('each file is sent once, with a searchable caption, after the backup', async () => {
+    const client = await ready();
+    await fileDocument(client, 'Chợ Bình Điền', 'hoa-don-1.jpg');
+    await fileDocument(client, 'Bia Sài Gòn', 'hoa-don-2.jpg');
+    vi.restoreAllMocks();
+    const tg = mockTelegram();
+
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    const first = docsSent(tg.sent);
+    expect(first.map((x) => x.fileName)).toEqual(['hoa-don-1.jpg', 'hoa-don-2.jpg']);
+    expect(first[0]!.caption).toBe(
+      '📄 03/10/2026 · Mua vào · Chợ Bình Điền · HĐ 0004512 · 1.250.000 đ\nhoa-don-1.jpg',
+    );
+    expect((await client.backups.status()).body).toMatchObject({
+      documents: { enabled: true, last: { sent: 2, pending: 0, error: null } },
+    });
+
+    // Nothing new: nothing sent. A new file: only that one.
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    expect(docsSent(tg.sent)).toHaveLength(2);
+    await fileDocument(client, 'Chợ', 'hoa-don-3.jpg');
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    expect(docsSent(tg.sent).map((x) => x.fileName)).toEqual([
+      'hoa-don-1.jpg',
+      'hoa-don-2.jpg',
+      'hoa-don-3.jpg',
+    ]);
+  });
+
+  it('a failure stops there and raises the warning; the next run resumes; a new chat gets everything again', async () => {
+    const client = await ready();
+    await fileDocument(client, 'A', 'a.jpg');
+    await fileDocument(client, 'B', 'b.jpg');
+    await fileDocument(client, 'C', 'c.jpg');
+    vi.restoreAllMocks();
+    let tg = mockTelegram({ failFile: 'b.jpg' });
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    expect(docsSent(tg.sent).map((x) => x.fileName)).toEqual(['a.jpg']);
+    const s = (await client.backups.status()).body as {
+      issue: string;
+      documents: { last: { sent: number; pending: number; error: string } };
+    };
+    expect(s.documents.last).toMatchObject({ sent: 1, pending: 2 });
+    expect(s.documents.last.error).toContain('file rejected');
+    expect(s.issue).toBe('TELEGRAM_FAILED');
+
+    vi.restoreAllMocks();
+    tg = mockTelegram();
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    expect(docsSent(tg.sent).map((x) => x.fileName)).toEqual(['b.jpg', 'c.jpg']);
+    expect((await client.backups.status()).body).toMatchObject({ issue: null });
+
+    await client.telegram.setChat({ body: { chatId: '-1001234', title: 'Sao lưu quán' } });
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    expect(
+      docsSent(tg.sent)
+        .filter((x) => x.chatId === '-1001234')
+        .map((x) => x.fileName),
+    ).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+  });
+
+  it('turned off: no invoice files are sent', async () => {
+    const client = await ready();
+    await fileDocument(client, 'A', 'a.jpg');
+    await client.settings.update({ body: { settings: { backup_telegram_documents: false } } });
+    vi.restoreAllMocks();
+    const tg = mockTelegram();
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    expect(docsSent(tg.sent)).toHaveLength(0);
   });
 });

@@ -109,6 +109,9 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
   _Kế toán quán - Sao lưu dữ liệu_, giữ 30 bản mới nhất ở đó. Lỗi Drive không làm mất bản trên máy.
 - Đã chọn cuộc trò chuyện Telegram và đang bật "Gửi qua Telegram" → bot gửi file vào đó (tối đa 50 MB). Lỗi gửi
   không làm mất bản trên máy.
+- "Gửi cả ảnh / file chứng từ": sau mỗi lần sao lưu, gửi các file chứng từ chưa gửi theo thứ tự tải lên, mỗi file
+  một lần (nhớ vị trí đã gửi), tối đa 100 file / lần, cách nhau ~3 giây; lỗi thì dừng, lần sau gửi tiếp. Đổi
+  cuộc trò chuyện → gửi lại từ đầu.
 - Cảnh báo khi: chưa có bản nào, lần gần nhất lỗi, bản thành công gần nhất cũ hơn 2 ngày, hoặc chưa gửi được lên
   Drive / qua Telegram.
 - Google Client ID / secret nhập trong Cài đặt (secret mã hoá, không gửi ra trình duyệt); đổi Client ID thì kết

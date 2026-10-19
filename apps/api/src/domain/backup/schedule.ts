@@ -45,11 +45,13 @@ export function backupIssue(args: {
   now: Date;
   last: { ok: boolean; drive: { ok: boolean } | null; telegram?: { ok: boolean } | null } | null;
   lastOkAt: string | null;
+  /** Last run sending invoice files to Telegram failed. */
+  documentsFailed?: boolean;
 }): BackupIssue | null {
   if (args.last && !args.last.ok) return 'FAILED';
   if (!args.lastOkAt) return 'NEVER';
   if (args.now.getTime() - Date.parse(args.lastOkAt) > STALE_AFTER_MS) return 'STALE';
   if (args.last?.drive && !args.last.drive.ok) return 'DRIVE_FAILED';
-  if (args.last?.telegram && !args.last.telegram.ok) return 'TELEGRAM_FAILED';
+  if ((args.last?.telegram && !args.last.telegram.ok) || args.documentsFailed) return 'TELEGRAM_FAILED';
   return null;
 }

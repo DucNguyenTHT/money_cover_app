@@ -36,6 +36,8 @@ export const settingsSchema = z.object({
   backup_drive: z.boolean(),
   /** Gửi mỗi bản sao lưu vào cuộc trò chuyện Telegram đã chọn. */
   backup_telegram: z.boolean(),
+  /** Gửi thêm từng file chứng từ mới (ảnh / PDF / XML) qua Telegram mỗi lần sao lưu. */
+  backup_telegram_documents: z.boolean(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

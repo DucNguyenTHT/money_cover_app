@@ -24,4 +24,5 @@ export const DEFAULT_SETTINGS: Settings = {
   backup_hour: 2,
   backup_drive: true,
   backup_telegram: true,
+  backup_telegram_documents: true,
 };

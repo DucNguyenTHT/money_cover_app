@@ -20,9 +20,17 @@ import { getSettings } from '../settings/settings.service';
 const STATUS_KEY = 'backup_status';
 export const KEEP = 30;
 
+interface DocumentsRun {
+  at: string;
+  sent: number;
+  pending: number;
+  error: string | null;
+}
+
 interface Stored {
   last: BackupRun | null;
   lastOk: BackupRun | null;
+  documents?: DocumentsRun | null;
 }
 
 async function load(): Promise<Stored> {
@@ -159,15 +167,45 @@ export async function run(trigger: 'AUTO' | 'MANUAL', userId: number | null): Pr
       }
     }
     const prev = await load();
-    await save({ last: result, lastOk: result.ok ? result : prev.lastOk });
+    await save({ ...prev, last: result, lastOk: result.ok ? result : prev.lastOk });
     if (userId !== null)
       await writeAudit(prisma, { entity: 'backup', entityId: name, action: 'RUN', after: result, userId });
     if (!result.ok) logger.error({ error: result.error }, 'Sao lưu dữ liệu thất bại');
   } finally {
     running = false;
   }
+  startDocuments();
   return status();
 }
+
+// ---- invoice files to Telegram, after each backup, in the background (can take minutes: Telegram allows
+// about 20 messages a minute in a group).
+const DOCS_PER_RUN = 100;
+const DOCS_PAUSE_MS = env.NODE_ENV === 'test' ? 0 : 3200;
+let documentsJob: Promise<void> | null = null;
+
+function startDocuments() {
+  if (documentsJob) return;
+  documentsJob = (async () => {
+    try {
+      if (!(await getSettings()).backup_telegram_documents) return;
+      const r = await telegram.sendDocuments(DOCS_PER_RUN, DOCS_PAUSE_MS);
+      if (!r) return;
+      const s = await load();
+      await save({ ...s, documents: { at: new Date().toISOString(), ...r } });
+      if (r.error) logger.error({ error: r.error }, 'Gửi chứng từ qua Telegram thất bại');
+    } catch (e) {
+      logger.error(e, 'Gửi chứng từ qua Telegram lỗi');
+    } finally {
+      documentsJob = null;
+    }
+  })();
+}
+
+/** Tests: wait for the background sending started by the last backup. */
+export const documentsIdle = async () => {
+  await documentsJob;
+};
 
 export async function status(): Promise<BackupStatus> {
   const [s, settings, files, d, t] = await Promise.all([
@@ -181,20 +219,35 @@ export async function status(): Promise<BackupStatus> {
   return {
     last: s.last,
     lastOk: s.lastOk,
-    issue: backupIssue({ now, last: s.last, lastOkAt: s.lastOk?.at ?? null }),
+    issue: backupIssue({
+      now,
+      last: s.last,
+      lastOkAt: s.lastOk?.at ?? null,
+      documentsFailed: !!s.documents?.error,
+    }),
     files: files.slice(0, 10),
     keep: KEEP,
     nextAt: nextSlot(now, settings.backup_hour).toISOString(),
     running,
     drive: { enabled: settings.backup_drive, connected: d.connected, email: d.email },
     telegram: { enabled: settings.backup_telegram, ready: t.ready, chatTitle: t.chatTitle },
+    documents: {
+      enabled: settings.backup_telegram_documents,
+      running: !!documentsJob,
+      last: s.documents ?? null,
+    },
   };
 }
 
 /** For the dashboard / bell. */
 export async function issue() {
   const s = await load();
-  return backupIssue({ now: new Date(), last: s.last, lastOkAt: s.lastOk?.at ?? null });
+  return backupIssue({
+    now: new Date(),
+    last: s.last,
+    lastOkAt: s.lastOk?.at ?? null,
+    documentsFailed: !!s.documents?.error,
+  });
 }
 
 /** Check every 10 minutes (and soon after start-up) whether tonight's backup is due. */

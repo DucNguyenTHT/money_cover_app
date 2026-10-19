@@ -1,4 +1,4 @@
-# Gửi bản sao lưu qua Telegram
+# Gửi bản sao lưu và chứng từ qua Telegram
 
 Mỗi bản sao lưu dữ liệu hằng đêm (file `.dump`) được bot Telegram gửi vào một cuộc trò chuyện của bạn.
 Miễn phí, không giới hạn số file, mỗi file tối đa **50 MB** (dữ liệu của quán thường vài trăm KB đến vài
@@ -20,10 +20,29 @@ chục MB). Không cần tên miền hay Google duyệt như Google Drive.
 4. Xong. Mục **Sao lưu dữ liệu** (cùng trang) có công tắc **Gửi qua Telegram** và dòng "Đã gửi bản …" sau mỗi
    lần sao lưu. Bấm **Sao lưu ngay** để thử luôn.
 
+## Ảnh / file chứng từ
+
+Bật **Gửi cả ảnh / file chứng từ** (mặc định bật) thì sau mỗi lần sao lưu, bot gửi tiếp các file chứng từ
+**chưa gửi**, mỗi file một tin, kèm chú thích để tìm lại bằng ô tìm kiếm của Telegram:
+
+```
+📄 03/10/2026 · Mua vào · Chợ Bình Điền · HĐ 0004512 · 1.250.000 đ
+hoa-don.jpg
+```
+
+- Mỗi file chỉ gửi **một lần**. Lần đầu bật, các chứng từ cũ được gửi dần, tối đa 100 file mỗi lần sao lưu
+  (Telegram chỉ cho khoảng 20 tin / phút trong nhóm). Mục Sao lưu dữ liệu ghi "còn … file gửi dần các lần sau".
+- Gửi lỗi (mất mạng, bot bị xoá khỏi nhóm…) thì dừng ở file đó, báo trên chuông; lần sao lưu sau gửi tiếp từ đó.
+- Chứng từ sửa / xoá trong app: bản đã gửi trên Telegram vẫn giữ nguyên. File thay thế được gửi như file mới.
+- Đổi sang cuộc trò chuyện khác: toàn bộ chứng từ được gửi lại từ đầu vào cuộc trò chuyện mới.
+
 ## Khôi phục từ Telegram
 
 Mở cuộc trò chuyện → tải file `ketoan-YYYYMMDD-HHmm.dump` mới nhất về thư mục `backups\` trên máy chủ → chạy
 lệnh khôi phục ở `setup-store.md` (mục Khôi phục).
+
+Ảnh chứng từ: tải các file trong cuộc trò chuyện về nếu cần đối chiếu. Database đã lưu thông tin chứng từ
+(ngày, đối tác, số tiền…); file ảnh khôi phục từ `backups\documents\` / `BACKUP_COPY_DIR` nếu có.
 
 ## Lưu ý
 

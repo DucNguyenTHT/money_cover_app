@@ -31,6 +31,14 @@ export const backupStatusSchema = z.object({
   running: z.boolean(),
   drive: z.object({ enabled: z.boolean(), connected: z.boolean(), email: z.string().nullable() }),
   telegram: z.object({ enabled: z.boolean(), ready: z.boolean(), chatTitle: z.string().nullable() }),
+  /** Invoice files sent to Telegram after each backup (in the background, a limited number per run). */
+  documents: z.object({
+    enabled: z.boolean(),
+    running: z.boolean(),
+    last: z
+      .object({ at: z.string(), sent: z.number(), pending: z.number(), error: z.string().nullable() })
+      .nullable(),
+  }),
 });
 export type BackupStatus = z.infer<typeof backupStatusSchema>;
 

@@ -354,7 +354,7 @@ function architectureSection() {
     <div class="arrow">Internet (tuỳ chọn)</div>
     <div class="row">
       ${box('Google Drive của chủ quán', 'bản sao lưu hằng đêm (tự động) · .zip chứng từ (bấm tay) · OAuth mã thiết bị, Client ID nhập trong Cài đặt · quyền drive.file', 'cloud')}
-      ${box('Telegram của chủ quán', 'bot gửi file sao lưu hằng đêm vào chat / nhóm đã chọn · ≤ 50 MB / file', 'cloud')}
+      ${box('Telegram của chủ quán', 'bot gửi file sao lưu hằng đêm + từng file chứng từ mới vào chat / nhóm đã chọn · ≤ 50 MB / file', 'cloud')}
       ${box('Ổ cứng ngoài / OneDrive', 'scripts/backup-db.ps1 lúc 03:00 chép backups/ + ảnh chứng từ → BACKUP_COPY_DIR', 'cloud')}
     </div>
   </div>
@@ -479,6 +479,11 @@ function flowsSection() {
         'Telegram',
         'nếu đã chọn cuộc trò chuyện và đang bật: bot gửi file (≤ 50 MB); lỗi không huỷ bản trên máy',
         'settings.backup_telegram · settings.telegram (mã hoá)',
+      ],
+      [
+        'Chứng từ qua Telegram',
+        'chạy nền: các file chưa gửi theo thứ tự id, ≤ 100 file / lần, ~3 giây / file; lỗi → dừng, lần sau gửi tiếp',
+        'document_files · settings.telegram.docsCursor',
       ],
       ['Ghi kết quả', 'lần chạy gần nhất / lần thành công gần nhất', 'settings.backup_status'],
       ['Cảnh báo', 'chuông + Tổng quan: chưa có / lỗi / quá 2 ngày / chưa gửi được lên Drive / Telegram'],

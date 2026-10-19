@@ -75,7 +75,8 @@ lúc 02:00 thì sao lưu ngay khi bật lại. Ở đó cũng có nút **Sao lư
 chuông thông báo báo khi lần sao lưu bị lỗi hoặc quá 2 ngày chưa có bản mới.
 
 **Qua Telegram.** Tạo bot với @BotFather, nhập mã bot ở **Hệ thống → Cài đặt → Telegram** và chọn cuộc trò
-chuyện nhận file (xem `setup-telegram.md`). Mỗi bản sao lưu được gửi vào đó (tối đa 50 MB / file).
+chuyện nhận file (xem `setup-telegram.md`). Mỗi bản sao lưu được gửi vào đó (tối đa 50 MB / file), kèm từng
+file chứng từ mới (bật / tắt ở Cài đặt → Sao lưu dữ liệu).
 
 **Lên Google Drive.** Kết nối Google Drive một lần ở **Hệ thống → Cài đặt → Google Drive** (nhập Client ID / secret rồi bấm Kết nối, xem
 `setup-google-drive.md`), sau đó mỗi bản sao lưu tự gửi lên thư mục _Kế toán quán - Sao lưu dữ liệu_ trên
@@ -93,8 +94,8 @@ powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1
 - Script chép các bản sao lưu chưa có sang `BACKUP_COPY_DIR` (ổ cứng ngoài / thư mục OneDrive…).
 - **Ảnh chứng từ** (menu Chứng từ) nằm ở `storage\documents\<năm>\<tháng>\`. Script chép các file
   mới sang `backups\documents\` và `BACKUP_COPY_DIR\documents\`. Bản chép không bao giờ bị xoá bớt, nên ảnh
-  lỡ xoá trên máy chủ vẫn còn trong bản sao lưu. Ảnh chứng từ không tự lên Drive; gửi theo tháng / năm ở
-  menu Chứng từ (nút Google Drive).
+  lỡ xoá trên máy chủ vẫn còn trong bản sao lưu. Ảnh chứng từ tự gửi qua Telegram nếu đã bật; không tự lên
+  Drive (gửi theo tháng / năm ở menu Chứng từ, nút Google Drive).
 - Nhật ký script: `backups\backup.log`.
 - Giữ **một bản `.env.prod`** ngoài máy chủ (USB / trình quản lý mật khẩu): khôi phục trên máy mới cần nó.
 
