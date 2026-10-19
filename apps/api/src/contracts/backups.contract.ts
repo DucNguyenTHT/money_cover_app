@@ -14,6 +14,8 @@ export const backupRunSchema = z.object({
   error: z.string().nullable(),
   /** Upload to Google Drive (null = not attempted: Drive not linked or turned off). */
   drive: z.object({ ok: z.boolean(), error: z.string().nullable(), link: z.string().nullable() }).nullable(),
+  /** Sent to Telegram (null = not attempted: no bot / chat, or turned off). */
+  telegram: z.object({ ok: z.boolean(), error: z.string().nullable() }).nullable().optional(),
 });
 export type BackupRun = z.infer<typeof backupRunSchema>;
 
@@ -21,13 +23,14 @@ export const backupStatusSchema = z.object({
   last: backupRunSchema.nullable(),
   lastOk: backupRunSchema.nullable(),
   /** What the owner should be warned about (null = all good). */
-  issue: z.enum(['NEVER', 'FAILED', 'STALE', 'DRIVE_FAILED']).nullable(),
+  issue: z.enum(['NEVER', 'FAILED', 'STALE', 'DRIVE_FAILED', 'TELEGRAM_FAILED']).nullable(),
   /** Newest dumps on the server, newest first. */
   files: z.array(z.object({ name: z.string(), bytes: z.number(), at: z.string() })),
   keep: z.number(),
   nextAt: z.string(),
   running: z.boolean(),
   drive: z.object({ enabled: z.boolean(), connected: z.boolean(), email: z.string().nullable() }),
+  telegram: z.object({ enabled: z.boolean(), ready: z.boolean(), chatTitle: z.string().nullable() }),
 });
 export type BackupStatus = z.infer<typeof backupStatusSchema>;
 

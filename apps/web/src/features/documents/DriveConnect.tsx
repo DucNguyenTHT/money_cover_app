@@ -51,7 +51,9 @@ export function ConnectStep({ onConnected }: { onConnected: () => void }) {
           } else
             setProblem(
               r.state === 'DENIED'
-                ? 'Bạn đã từ chối cấp quyền trên Google.'
+                ? 'Google từ chối kết nối: bạn đã bấm Từ chối, hoặc ứng dụng trên Google Cloud còn ở chế độ Testing ' +
+                    '("Access blocked … has not completed the Google verification process"). Khi đó vào Google Auth ' +
+                    'Platform → Audience → bấm Publish app (hoặc thêm email vào Test users), rồi lấy mã mới.'
                 : 'Mã đã hết hạn, hãy lấy mã mới.',
             );
         } catch (e) {

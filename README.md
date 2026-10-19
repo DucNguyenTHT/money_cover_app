@@ -1,9 +1,10 @@
 # Quán ăn — Bán hàng (POS) & Kế toán nội bộ
 
-Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR), kho FIFO theo lô (nhập, xuất, nợ kho, kiểm kê),
-giá thành & giá bán từng món (kèm lịch sử giá bán), lãi lỗ tháng / quý / năm, khoá sổ, lưu trữ chứng từ
-(ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên Google Drive) và thuế hộ kinh doanh (GTGT + TNCN tạm tính,
-báo cáo "Thuế phải nộp").
+Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR, đơn app giao hàng), kho FIFO theo lô (nhập, xuất, nợ kho,
+kiểm kê), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá), lãi lỗ tháng / quý / năm,
+khoá sổ, lưu trữ chứng từ (ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên Google Drive), thuế hộ kinh doanh
+(GTGT + TNCN tạm tính, so sánh 2 cách tính, báo cáo "Thuế phải nộp") và sao lưu dữ liệu tự động mỗi đêm (kèm bản
+trên Telegram / Google Drive).
 
 | App        | Nội dung                                                                                                                                                  |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,7 +14,7 @@ báo cáo "Thuế phải nộp").
 
 Sơ đồ hệ thống, database và API (luôn khớp phiên bản đang chạy): `/api/docs/architecture` — dev: http://localhost:4000/api/docs/architecture.
 
-Tài liệu: [kiến trúc](docs/architecture.md) · [quy tắc nghiệp vụ](docs/business-rules.md) · [cài máy chủ tại quán](docs/setup-store.md) · [máy in](docs/setup-printer.md) · [Google Drive](docs/setup-google-drive.md) · [thuế GTGT & hộ kinh doanh](docs/thue-gtgt-viet-nam.md) · [áp dụng thuế trong app](docs/ap-dung-thue-trong-app.md)
+Tài liệu: [kiến trúc](docs/architecture.md) · [quy tắc nghiệp vụ](docs/business-rules.md) · [cài máy chủ tại quán](docs/setup-store.md) · [máy in](docs/setup-printer.md) · [Google Drive](docs/setup-google-drive.md) · [Telegram](docs/setup-telegram.md) · [thuế GTGT & hộ kinh doanh](docs/thue-gtgt-viet-nam.md) · [áp dụng thuế trong app](docs/ap-dung-thue-trong-app.md)
 
 ## Chạy trên máy dev
 
@@ -50,9 +51,11 @@ Commit chạy `lint-staged` (eslint + prettier) qua husky. CI (`.github/workflow
 ```powershell
 copy .env.prod.example .env.prod   # điền mật khẩu DB, JWT_SECRET, SITE_HOSTS
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-powershell -ExecutionPolicy Bypass -File scripts\install-task.ps1   # sao lưu tự động 02:00
+powershell -ExecutionPolicy Bypass -File scripts\install-task.ps1   # (nên làm) 03:00 chép bản sao lưu + ảnh ra ổ ngoài
 ```
 
+Database tự sao lưu lúc 02:00 vào `backups\` (Hệ thống → Cài đặt → Sao lưu dữ liệu); thiết lập Telegram
+([hướng dẫn](docs/setup-telegram.md)) hoặc Google Drive ở Hệ thống → Cài đặt để có thêm bản ngoài máy chủ.
 Chi tiết (chứng chỉ cho máy tính bảng, khôi phục bản sao lưu…): [docs/setup-store.md](docs/setup-store.md).
 
 ## Quy ước chính

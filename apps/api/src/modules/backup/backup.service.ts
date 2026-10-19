@@ -14,6 +14,7 @@ import { logger } from '../../core/logger';
 import type { BackupRun, BackupStatus } from '../../contracts/backups.contract';
 import { backupDue, backupIssue, nextSlot, shopClock } from '../../domain/backup/schedule';
 import * as drive from '../drive/drive.service';
+import * as telegram from '../telegram/telegram.service';
 import { getSettings } from '../settings/settings.service';
 
 const STATUS_KEY = 'backup_status';
@@ -122,6 +123,7 @@ export async function run(trigger: 'AUTO' | 'MANUAL', userId: number | null): Pr
     bytes: null,
     error: null,
     drive: null,
+    telegram: null,
   };
   try {
     await mkdir(dir(), { recursive: true });
@@ -147,6 +149,15 @@ export async function run(trigger: 'AUTO' | 'MANUAL', userId: number | null): Pr
         result.drive = { ok: false, error: (e as Error).message, link: null };
       }
     }
+    if (result.ok && (await getSettings()).backup_telegram && (await telegram.isReady())) {
+      try {
+        const caption = `Sao lưu dữ liệu ${name} · ${Math.max(1, Math.round((result.bytes ?? 0) / 1024))} KB`;
+        await telegram.sendBackup(file, caption);
+        result.telegram = { ok: true, error: null };
+      } catch (e) {
+        result.telegram = { ok: false, error: (e as Error).message };
+      }
+    }
     const prev = await load();
     await save({ last: result, lastOk: result.ok ? result : prev.lastOk });
     if (userId !== null)
@@ -159,7 +170,13 @@ export async function run(trigger: 'AUTO' | 'MANUAL', userId: number | null): Pr
 }
 
 export async function status(): Promise<BackupStatus> {
-  const [s, settings, files, d] = await Promise.all([load(), getSettings(), listFiles(), drive.status()]);
+  const [s, settings, files, d, t] = await Promise.all([
+    load(),
+    getSettings(),
+    listFiles(),
+    drive.status(),
+    telegram.status(),
+  ]);
   const now = new Date();
   return {
     last: s.last,
@@ -170,6 +187,7 @@ export async function status(): Promise<BackupStatus> {
     nextAt: nextSlot(now, settings.backup_hour).toISOString(),
     running,
     drive: { enabled: settings.backup_drive, connected: d.connected, email: d.email },
+    telegram: { enabled: settings.backup_telegram, ready: t.ready, chatTitle: t.chatTitle },
   };
 }
 

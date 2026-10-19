@@ -34,6 +34,8 @@ export const settingsSchema = z.object({
   backup_hour: z.coerce.number().int().min(0).max(23),
   /** Đẩy mỗi bản sao lưu lên Google Drive đã kết nối. */
   backup_drive: z.boolean(),
+  /** Gửi mỗi bản sao lưu vào cuộc trò chuyện Telegram đã chọn. */
+  backup_telegram: z.boolean(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

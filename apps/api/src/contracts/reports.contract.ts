@@ -266,7 +266,7 @@ export const dashboardSchema = z.object({
     /** Orders still open from an earlier business day (that day cannot be closed). */
     staleOpenOrders: z.number(),
     /** Database backup needs attention (see backups.contract). */
-    backup: z.enum(['NEVER', 'FAILED', 'STALE', 'DRIVE_FAILED']).nullable(),
+    backup: z.enum(['NEVER', 'FAILED', 'STALE', 'DRIVE_FAILED', 'TELEGRAM_FAILED']).nullable(),
     lockedPins: z.number(),
   }),
   /** Household tax threshold watch (null for a company). */

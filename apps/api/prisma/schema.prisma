@@ -314,8 +314,8 @@ model DiningTable {
 }
 
 /// App giao hàng
-/// Các app giao đồ ăn và % chiết khấu, trừ vào lãi của đơn kênh App.
-/// Lưu: tên app, % hoa hồng.
+/// Các app giao đồ ăn và % chiết khấu, trừ vào lãi của đơn kênh App; món có thể có giá riêng cho từng app.
+/// Lưu: tên app, % hoa hồng, đang dùng.
 model DeliveryApp {
   id            Int     @id @default(autoincrement())
   name          String
@@ -361,7 +361,7 @@ model OverheadExpense {
 
 /// Cài đặt
 /// Cấu hình chung dạng khoá – giá trị.
-/// Lưu: giờ bắt đầu ngày kinh doanh, VAT, phụ thu, mức giảm tối đa, tài khoản VietQR, chế độ in…; kết nối Google Drive (mã hoá).
+/// Lưu: giờ bắt đầu ngày kinh doanh, thuế, phụ thu, mức giảm tối đa, VietQR, chế độ in, giờ sao lưu…; Google Client ID / secret, kết nối Drive, mã bot Telegram (mã hoá), kết quả sao lưu gần nhất.
 model Setting {
   key   String @id
   value Json

@@ -337,8 +337,8 @@ function architectureSection() {
             <div class="layer l1"><b>modules/*</b><span>router (ts-rest) + service: ${Object.keys(api).map(esc).join(' · ')}</span></div>
             <div class="layer-row">
               <div class="layer l2"><b>contracts</b><span>API dùng chung web ↔ api (zod)</span></div>
-              <div class="layer l3"><b>domain</b><span>nghiệp vụ thuần: FIFO, giá, đơn, kiểm kê, lãi lỗ, quyền chứng từ</span></div>
-              <div class="layer l4"><b>core</b><span>db (Prisma), auth JWT, audit, khoá sổ, realtime, in ESC/POS, storage, mã hoá</span></div>
+              <div class="layer l3"><b>domain</b><span>nghiệp vụ thuần: FIFO, giá (theo kênh / app), đơn, kiểm kê, lãi lỗ, thuế, quyền chứng từ, lịch sao lưu</span></div>
+              <div class="layer l4"><b>core</b><span>db (Prisma), auth JWT, audit, khoá sổ, realtime, in ESC/POS, storage, mã hoá · lịch sao lưu (modules/backup)</span></div>
             </div>
           </div>
         </div>
@@ -346,14 +346,16 @@ function architectureSection() {
       <div class="arrow small">Prisma · TypedSQL · file · TCP</div>
       <div class="row">
         ${box('PostgreSQL 16', 'toàn bộ dữ liệu · volume pgdata', 'store')}
+        ${box('backups/', 'pg_dump mỗi đêm do api tự chạy (giữ 30 bản)', 'store')}
         ${box('storage/documents', 'ảnh / PDF / XML chứng từ theo năm/tháng · thư mục trên máy', 'store')}
         ${box('Máy in nhiệt LAN', 'ESC/POS cổng 9100 · bill, bếp, bar', 'device')}
       </div>
     </div>
     <div class="arrow">Internet (tuỳ chọn)</div>
     <div class="row">
-      ${box('Google Drive của chủ quán', 'gửi .zip chứng từ khi bấm tay · OAuth mã thiết bị · quyền drive.file', 'cloud')}
-      ${box('Sao lưu hằng đêm', 'scripts/backup-db.ps1 → backups/ (pg_dump + ảnh) → BACKUP_COPY_DIR', 'cloud')}
+      ${box('Google Drive của chủ quán', 'bản sao lưu hằng đêm (tự động) · .zip chứng từ (bấm tay) · OAuth mã thiết bị, Client ID nhập trong Cài đặt · quyền drive.file', 'cloud')}
+      ${box('Telegram của chủ quán', 'bot gửi file sao lưu hằng đêm vào chat / nhóm đã chọn · ≤ 50 MB / file', 'cloud')}
+      ${box('Ổ cứng ngoài / OneDrive', 'scripts/backup-db.ps1 lúc 03:00 chép backups/ + ảnh chứng từ → BACKUP_COPY_DIR', 'cloud')}
     </div>
   </div>
 
@@ -395,7 +397,11 @@ function flowsSection() {
     ]),
     flow('Bán hàng', 'Doanh thu chỉ đến từ đơn POS.', [
       ['Chọn bàn / mang về / app', 'mở đơn, mã đơn theo ngày kinh doanh', 'orders (OPEN) · order_counters'],
-      ['Gọi món', 'giá theo kênh (tại quán / app) tại ngày bán', 'order_items · dish_prices'],
+      [
+        'Gọi món',
+        'giá tại ngày bán: tại quán / mang về = giá quán; app = giá riêng của app → giá app chung → giá quán',
+        'order_items · dish_prices.delivery_app_id',
+      ],
       ['Gửi bếp', 'in phiếu ESC/POS theo trạm, màn bếp nhận realtime', 'kitchen_status · printers'],
       ['Thanh toán', 'nhiều phương thức, VietQR, giảm giá cần PIN khi vượt mức', 'order_payments'],
       [
@@ -404,7 +410,11 @@ function flowsSection() {
         'issues SALE_USE · issue_allocations · lots',
       ],
       ['Huỷ đơn / món', 'huỷ không xoá; món đã chế biến ghi hao', 'orders CANCELLED · audit_logs'],
-      ['Chốt ngày', 'đối chiếu tiền mặt đếm được', 'day_closings'],
+      [
+        'Chốt ngày',
+        'đối chiếu tiền mặt; ngày còn đơn mở không chốt được (cảnh báo đơn treo từ ngày trước)',
+        'day_closings',
+      ],
     ]),
     flow('Kho', 'Giá vốn FIFO theo từng lô nhập.', [
       ['Phiếu nhập', 'mỗi dòng tạo một lô giữ giá nhập; tất toán nợ kho', 'receipts · receipt_items · lots'],
@@ -423,9 +433,17 @@ function flowsSection() {
     ]),
     flow('Giá món', 'Gợi ý giá theo % nguyên liệu mục tiêu.', [
       ['Định mức', 'nguyên liệu + bao bì cho mỗi món, có ngày hiệu lực', 'dish_recipes · dish_recipe_items'],
-      ['Bảng tính giá', 'giá vốn = định mức × giá nhập gần nhất + chiết khấu app + chi phí chung'],
-      ['Cảnh báo giá', 'món lỗ / vượt % mục tiêu sau khi giá nhập đổi'],
-      ['Áp dụng giá mới', 'theo ngày; đơn cũ giữ giá cũ; có lịch sử giá bán', 'dish_prices'],
+      [
+        'Bảng tính giá',
+        'giá vốn = định mức × giá nhập gần nhất; mỗi app một cột lãi theo phí sàn riêng; % chi phí chung chỉ tính tháng bán trọn vẹn',
+        'overhead_expenses · delivery_apps',
+      ],
+      ['Cảnh báo giá', 'món lỗ (ở bất kỳ app nào) / vượt % mục tiêu sau khi giá nhập đổi'],
+      [
+        'Áp dụng giá mới',
+        'theo ngày, cho quán / app chung / từng app; không lùi về ngày món đã bán; có lịch sử giá',
+        'dish_prices',
+      ],
     ]),
     flow('Kỳ kế toán (tháng)', 'Lãi lỗ tổng hợp theo tháng; quý / năm = cộng các tháng.', [
       ['Chi phí chung', 'mặt bằng, lương, điện nước… theo tháng', 'overhead_expenses'],
@@ -444,6 +462,27 @@ function flowsSection() {
       ['Lưu file', 'ghi nguyên tử vào storage/documents/năm/tháng', 'document_files.path'],
       ['Xem / thay / xoá', 'người tải lên trong 24h hoặc ADMIN (có lý do); xoá mềm', 'deleted_at'],
       ['Sao lưu', 'zip theo tháng/năm → tải về hoặc gửi Google Drive', 'settings.google_drive (mã hoá)'],
+    ]),
+    flow('Sao lưu dữ liệu', 'api tự chạy, không cần cài lịch Windows.', [
+      [
+        'Đến giờ',
+        'backup_hour (02:00); máy tắt lúc đó → chạy khi bật lại; lỗi → thử lại mỗi giờ',
+        'settings.backup_hour',
+      ],
+      ['pg_dump', 'định dạng custom → backups/ketoan-YYYYMMDD-HHmm.dump, kiểm tra đầu file, giữ 30 bản'],
+      [
+        'Google Drive',
+        'nếu đã kết nối và đang bật: tải lên thư mục Sao lưu dữ liệu, giữ 30 bản; lỗi Drive không huỷ bản trên máy',
+        'settings.backup_drive · settings.google_client (mã hoá)',
+      ],
+      [
+        'Telegram',
+        'nếu đã chọn cuộc trò chuyện và đang bật: bot gửi file (≤ 50 MB); lỗi không huỷ bản trên máy',
+        'settings.backup_telegram · settings.telegram (mã hoá)',
+      ],
+      ['Ghi kết quả', 'lần chạy gần nhất / lần thành công gần nhất', 'settings.backup_status'],
+      ['Cảnh báo', 'chuông + Tổng quan: chưa có / lỗi / quá 2 ngày / chưa gửi được lên Drive / Telegram'],
+      ['Khôi phục', 'scripts/restore-db.ps1 với file .dump (trên máy, hoặc tải từ Telegram / Drive)'],
     ]),
   ].join('');
 }

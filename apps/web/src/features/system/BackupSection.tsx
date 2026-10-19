@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, CloudUpload, DatabaseBackup } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CloudUpload, DatabaseBackup, Send } from 'lucide-react';
 import type { BackupRun, Settings } from '@ketoan/api/contracts';
 import { Button } from '@/components/ui/Button';
 import { Card, Select, Switch } from '@/components/ui/controls';
@@ -21,6 +21,9 @@ const size = (bytes: number) =>
   bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
     : `${Math.round(bytes / 1024)} KB`;
+
+/** The local backup is fine; only the copy outside the server failed (shown under its destination). */
+const COPY_ISSUES: (string | null)[] = ['DRIVE_FAILED', 'TELEGRAM_FAILED'];
 
 function RunLine({ run }: { run: BackupRun }) {
   return (
@@ -64,7 +67,8 @@ export function BackupSection({ s, setS }: { s: Settings; setS: (s: Settings) =>
           <h2 className="font-semibold text-ink-strong">Sao lưu dữ liệu</h2>
           <p className="mt-0.5 text-[13px] text-muted">
             Toàn bộ dữ liệu được sao lưu mỗi ngày trên máy chủ (giữ {b?.keep ?? 30} bản mới nhất)
-            {b?.drive.connected && s.backup_drive ? ' và gửi một bản lên Google Drive' : ''}.
+            {b?.telegram.ready && s.backup_telegram ? ', gửi qua Telegram' : ''}
+            {b?.drive.connected && s.backup_drive ? ', gửi lên Google Drive' : ''}.
           </p>
         </div>
         <Button
@@ -80,10 +84,10 @@ export function BackupSection({ s, setS }: { s: Settings; setS: (s: Settings) =>
         <div
           className={cn(
             'mt-4 flex items-start gap-2 rounded-ctl px-3 py-2.5 text-[13px]',
-            b.issue && b.issue !== 'DRIVE_FAILED' ? 'bg-warn-soft text-warn' : 'bg-good-soft text-good',
+            b.issue && !COPY_ISSUES.includes(b.issue) ? 'bg-warn-soft text-warn' : 'bg-good-soft text-good',
           )}
         >
-          {b.issue && b.issue !== 'DRIVE_FAILED' ? (
+          {b.issue && !COPY_ISSUES.includes(b.issue) ? (
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           ) : (
             <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
@@ -122,7 +126,25 @@ export function BackupSection({ s, setS }: { s: Settings; setS: (s: Settings) =>
             </Select>
           )}
         </Field>
-        <div className="flex flex-col gap-1.5 sm:col-span-1 lg:col-span-2">
+        <div className="flex flex-col gap-3 sm:col-span-1 lg:col-span-2">
+          {b?.telegram.ready && (
+            <div className="flex flex-col gap-1.5">
+              <Switch
+                checked={s.backup_telegram}
+                onChange={(v) => setS({ ...s, backup_telegram: v })}
+                label={`Gửi qua Telegram (${b.telegram.chatTitle ?? 'đã chọn'})`}
+                description="Mỗi bản sao lưu là một file trong cuộc trò chuyện đã chọn"
+              />
+              {last?.telegram && (
+                <p className={cn('text-xs', last.telegram.ok ? 'text-faint' : 'text-warn')}>
+                  <Send size={12} className="mr-1 inline" />
+                  {last.telegram.ok
+                    ? `Đã gửi bản ${when(last.at)}`
+                    : `Chưa gửi được qua Telegram: ${last.telegram.error}`}
+                </p>
+              )}
+            </div>
+          )}
           {b?.drive.connected ? (
             <>
               <Switch
@@ -154,13 +176,19 @@ export function BackupSection({ s, setS }: { s: Settings; setS: (s: Settings) =>
               )}
             </>
           ) : (
-            <p className="text-[13px] text-muted">
-              Chưa kết nối Google Drive nên bản sao lưu chỉ nằm trên máy chủ. Kết nối ở mục{' '}
-              <a className="text-primary-ink underline" href="#google-drive">
-                Google Drive
-              </a>{' '}
-              phía trên, sau đó mỗi bản sao lưu sẽ tự gửi lên Drive.
-            </p>
+            !b?.telegram.ready && (
+              <p className="text-[13px] text-muted">
+                Bản sao lưu đang chỉ nằm trên máy chủ. Nên có thêm một bản ngoài máy: thiết lập{' '}
+                <a className="text-primary-ink underline" href="#telegram">
+                  Telegram
+                </a>{' '}
+                hoặc{' '}
+                <a className="text-primary-ink underline" href="#google-drive">
+                  Google Drive
+                </a>{' '}
+                phía trên, sau đó mỗi bản sao lưu sẽ tự gửi đi.
+              </p>
+            )
           )}
         </div>
       </div>

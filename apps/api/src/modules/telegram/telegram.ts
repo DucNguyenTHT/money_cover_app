@@ -1,0 +1,92 @@
+// Minimal Telegram Bot API client over fetch: just what the backup needs (no SDK).
+import { openAsBlob } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
+import { AppError } from '../../core/errors';
+
+const API = 'https://api.telegram.org';
+/** Bots may upload files up to 50 MB. */
+export const MAX_UPLOAD = 50 * 1024 * 1024;
+
+export const telegramError = (message: string, details?: unknown) =>
+  new AppError(409, 'TELEGRAM_ERROR', message, details);
+
+/** The bot token is no longer accepted (revoked in @BotFather, or mistyped). */
+export class BadTokenError extends Error {}
+
+async function call<T>(token: string, method: string, body?: FormData | Record<string, unknown>): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API}/bot${token}/${method}`, {
+      method: 'POST',
+      ...(body instanceof FormData
+        ? { body }
+        : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) }),
+    });
+  } catch {
+    throw telegramError('Không kết nối được Telegram — kiểm tra Internet của máy chủ');
+  }
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
+  if (res.status === 401 || res.status === 404) throw new BadTokenError(json.description ?? 'Unauthorized');
+  if (!json.ok) throw telegramError(`Telegram báo lỗi: ${json.description ?? res.status}`, json);
+  return json.result as T;
+}
+
+export async function getMe(token: string) {
+  const me = await call<{ id: number; username: string; first_name: string }>(token, 'getMe');
+  return { username: me.username, name: me.first_name };
+}
+
+export interface Chat {
+  id: string;
+  title: string;
+  type: string;
+}
+
+/** Chats that recently wrote to the bot (private chat after "Start", or a group the bot was added to). */
+export async function recentChats(token: string): Promise<Chat[]> {
+  type Msg = {
+    chat: {
+      id: number;
+      type: string;
+      title?: string;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
+  };
+  const updates = await call<{ message?: Msg; channel_post?: Msg; my_chat_member?: Msg }[]>(
+    token,
+    'getUpdates',
+    {
+      allowed_updates: ['message', 'channel_post', 'my_chat_member'],
+    },
+  );
+  const chats = new Map<string, Chat>();
+  for (const u of updates) {
+    const c = (u.message ?? u.channel_post ?? u.my_chat_member)?.chat;
+    if (!c) continue;
+    const title =
+      c.title ??
+      ([c.first_name, c.last_name].filter(Boolean).join(' ') ||
+        (c.username ? `@${c.username}` : String(c.id)));
+    chats.set(String(c.id), { id: String(c.id), title, type: c.type });
+  }
+  return [...chats.values()].reverse();
+}
+
+export const sendMessage = (token: string, chatId: string, text: string) =>
+  call(token, 'sendMessage', { chat_id: chatId, text });
+
+/** Send a file from disk as a document (streamed from disk by openAsBlob). */
+export async function sendDocument(token: string, chatId: string, file: string, caption: string) {
+  const { size } = await stat(file);
+  if (size > MAX_UPLOAD)
+    throw telegramError(`File ${Math.round(size / 1024 / 1024)} MB vượt giới hạn 50 MB của bot Telegram`);
+  const form = new FormData();
+  form.set('chat_id', chatId);
+  form.set('caption', caption);
+  form.set('document', await openAsBlob(file), path.basename(file));
+  const msg = await call<{ message_id: number }>(token, 'sendDocument', form);
+  return { messageId: msg.message_id, size };
+}

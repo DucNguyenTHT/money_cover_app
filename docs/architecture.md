@@ -11,6 +11,7 @@ máy tính bảng / máy thu ngân ── HTTPS (Caddy, CA nội bộ) ──┬
                                                           ├── /api/*       → api (Express, ts-rest)
                                                           └── /socket.io/* → api (Socket.IO)
 api ── PostgreSQL 16          api ── TCP 9100 ── máy in nhiệt LAN
+api ── pg_dump 02:00 ──► backups/ ──(tuỳ chọn, Internet)──► Telegram bot · Google Drive của chủ quán
 ```
 
 Monorepo pnpm + Turborepo, 2 app:
@@ -76,3 +77,9 @@ pnpm e2e -- onboarding
 - **Nợ kho thay vì chặn bán**: quán không được dừng bán vì quên nhập phiếu; sai số được sửa khi nhập hàng.
 - **Server tại quán + Caddy CA nội bộ**: chạy khi mất internet; HTTPS cần cho PWA.
 - **In ESC/POS từ server**: máy tính bảng không cần driver; trình duyệt là phương án dự phòng.
+- **API tự sao lưu** (`modules/backup`, `pg_dump` cài trong image): không phụ thuộc lịch Windows, có trạng thái và
+  cảnh báo trong app, gửi thẳng qua Telegram bot / lên Drive. Script PowerShell chỉ còn chép bản sao lưu ra ổ ngoài.
+- **Giá theo app trong cùng bảng `dish_prices`** (`delivery_app_id` rỗng = giá app chung, unique `NULLS NOT DISTINCT`):
+  một nơi lưu lịch sử giá; thứ tự chọn giá nằm ở `domain/pricing/price-list.ts`.
+- **Cấu hình nhạy cảm trong DB, mã hoá** (`core/secret-box.ts`): mã bot Telegram, Google Client secret, refresh token Drive nằm trong
+  `settings` dưới khoá riêng, không thuộc schema cài đặt công khai nên không bao giờ trả ra trình duyệt.

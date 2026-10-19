@@ -57,6 +57,7 @@ const BACKUP_TEXT: Record<NonNullable<Dashboard['alerts']['backup']>, string> = 
   FAILED: 'Lần sao lưu dữ liệu gần nhất bị lỗi',
   STALE: 'Đã hơn 2 ngày chưa có bản sao lưu dữ liệu mới',
   DRIVE_FAILED: 'Bản sao lưu chưa gửi được lên Google Drive',
+  TELEGRAM_FAILED: 'Bản sao lưu chưa gửi được qua Telegram',
 };
 
 export function alertItems(d: Dashboard): AlertItem[] {

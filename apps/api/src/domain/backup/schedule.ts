@@ -36,19 +36,20 @@ export function backupDue(args: {
   return true;
 }
 
-export type BackupIssue = 'NEVER' | 'FAILED' | 'STALE' | 'DRIVE_FAILED';
+export type BackupIssue = 'NEVER' | 'FAILED' | 'STALE' | 'DRIVE_FAILED' | 'TELEGRAM_FAILED';
 
 /** Older than this without a good backup = warn (one missed night is tolerated). */
 export const STALE_AFTER_MS = 48 * HOUR;
 
 export function backupIssue(args: {
   now: Date;
-  last: { ok: boolean; drive: { ok: boolean } | null } | null;
+  last: { ok: boolean; drive: { ok: boolean } | null; telegram?: { ok: boolean } | null } | null;
   lastOkAt: string | null;
 }): BackupIssue | null {
   if (args.last && !args.last.ok) return 'FAILED';
   if (!args.lastOkAt) return 'NEVER';
   if (args.now.getTime() - Date.parse(args.lastOkAt) > STALE_AFTER_MS) return 'STALE';
   if (args.last?.drive && !args.last.drive.ok) return 'DRIVE_FAILED';
+  if (args.last?.telegram && !args.last.telegram.ok) return 'TELEGRAM_FAILED';
   return null;
 }

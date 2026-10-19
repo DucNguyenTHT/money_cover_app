@@ -60,8 +60,12 @@ App chạy HTTPS bằng chứng chỉ do máy chủ tự cấp (cần cho PWA v�
 2. **Hệ thống → Cài đặt**: tên quán, địa chỉ, giờ bắt đầu ngày kinh doanh, **loại hình nộp thuế** (hộ kinh doanh / công ty; hộ kinh doanh: cách tính thuế TNCN, đã đăng ký hoá đơn điện tử chưa), phụ thu, tài khoản ngân hàng (VietQR), chế độ in.
    Nhóm món nào không phải đồ ăn uống (vd bán hàng hoá đóng gói) thì đổi **ngành thuế** ở _Thực đơn → Nhóm món_.
 3. **Hệ thống → Tài khoản**: tạo tài khoản thu ngân (STAFF), bếp / bar (KITCHEN, chọn trạm).
-4. **Hệ thống → Bàn & khu vực**, **App giao hàng**, **Máy in & trạm** (xem `setup-printer.md`).
+4. **Hệ thống → Bàn & khu vực**, **App giao hàng** (tên app + % chiết khấu), **Máy in & trạm** (xem `setup-printer.md`).
 5. **Hệ thống → Nhập dữ liệu Excel**: tải file mẫu, điền nguyên liệu → món → định mức → **tồn đầu**, nhập theo đúng thứ tự đó.
+   File mẫu món có cột **Giá app** (giá chung) và một cột **Giá <tên app>** cho mỗi app — tạo app ở bước 4 trước khi tải mẫu.
+   Sau này đổi giá từng app ở _Thực đơn → món → Giá bán_.
+6. **Hệ thống → Cài đặt → Telegram** (khuyên dùng, 3 phút, xem `setup-telegram.md`) hoặc **Google Drive**
+   (xem `setup-google-drive.md`) để bản sao lưu hằng đêm có thêm một bản ngoài máy chủ.
 
 ## 6. Sao lưu
 
@@ -69,6 +73,9 @@ App chạy HTTPS bằng chứng chỉ do máy chủ tự cấp (cần cho PWA v�
 **Hệ thống → Cài đặt → Sao lưu dữ liệu**) vào `backups\ketoan-YYYYMMDD-HHmm.dump`, giữ 30 bản mới nhất. Máy tắt
 lúc 02:00 thì sao lưu ngay khi bật lại. Ở đó cũng có nút **Sao lưu ngay**, xem bản gần nhất và lỗi nếu có;
 chuông thông báo báo khi lần sao lưu bị lỗi hoặc quá 2 ngày chưa có bản mới.
+
+**Qua Telegram.** Tạo bot với @BotFather, nhập mã bot ở **Hệ thống → Cài đặt → Telegram** và chọn cuộc trò
+chuyện nhận file (xem `setup-telegram.md`). Mỗi bản sao lưu được gửi vào đó (tối đa 50 MB / file).
 
 **Lên Google Drive.** Kết nối Google Drive một lần ở **Hệ thống → Cài đặt → Google Drive** (nhập Client ID / secret rồi bấm Kết nối, xem
 `setup-google-drive.md`), sau đó mỗi bản sao lưu tự gửi lên thư mục _Kế toán quán - Sao lưu dữ liệu_ trên
@@ -100,7 +107,8 @@ powershell -ExecutionPolicy Bypass -File scripts\restore-db.ps1 -File backups\ke
 Lệnh hỏi xác nhận (gõ `KHOIPHUC`), thay toàn bộ dữ liệu bằng bản sao lưu rồi khởi động lại API.
 Lệnh cũng chép lại các ảnh chứng từ còn thiếu từ `backups\documents\` vào `storage\documents\`. Trên máy
 mới, chép thư mục `documents` từ `BACKUP_COPY_DIR` vào `backups\` trước khi chạy lệnh.
-Bản trên Google Drive: tải file `.dump` từ thư mục _Kế toán quán - Sao lưu dữ liệu_ về `backups\` rồi chạy lệnh trên.
+Bản trên Telegram / Google Drive: tải file `.dump` (cuộc trò chuyện Telegram, hoặc thư mục _Kế toán quán - Sao lưu
+dữ liệu_ trên Drive) về `backups\` rồi chạy lệnh trên.
 Máy mới: làm lại bước 1–3 với **cùng `.env.prod`**, sau đó chạy lệnh khôi phục.
 
 **Nên thử khôi phục 1 lần ngay sau khi cài** (sang máy khác hoặc DB trống) để chắc chắn bản sao lưu dùng được.

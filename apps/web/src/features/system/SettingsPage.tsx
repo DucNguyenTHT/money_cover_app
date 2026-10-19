@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { BackupSection } from './BackupSection';
 import { GoogleDriveSection } from './GoogleDriveSection';
+import { TelegramSection } from './TelegramSection';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 
@@ -350,6 +351,10 @@ export function SettingsPage() {
             />
           </div>
         </Section>
+
+        <div id="telegram" className="scroll-mt-20">
+          <TelegramSection />
+        </div>
 
         <GoogleDriveSection />
 

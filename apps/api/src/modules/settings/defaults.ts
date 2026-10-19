@@ -23,4 +23,5 @@ export const DEFAULT_SETTINGS: Settings = {
   einvoice_registered: false,
   backup_hour: 2,
   backup_drive: true,
+  backup_telegram: true,
 };
