@@ -68,6 +68,7 @@ import {
 import { TAX_GROUPS } from '../../domain/enums';
 import { businessToday, getSettings } from '../settings/settings.service';
 import { issue as backupIssue } from '../backup/backup.service';
+import { stock } from '../inventory/inventory.service';
 import * as pricing from '../pricing/pricing.service';
 
 type Dec = Prisma.Decimal | null | undefined;
@@ -753,6 +754,7 @@ export async function dashboard(): Promise<Dashboard> {
     lockedPins,
     settings,
     backup,
+    lowStock,
     ytdSales,
   ] = await Promise.all([
     daily(from30, today),
@@ -772,6 +774,7 @@ export async function dashboard(): Promise<Dashboard> {
     prisma.user.count({ where: { pinLockedUntil: { gt: new Date() } } }),
     getSettings(),
     backupIssue(),
+    stock().then((rows) => rows.filter((r) => r.status !== 'OK').length),
     prisma.order.aggregate({
       where: {
         branchId,
@@ -824,12 +827,20 @@ export async function dashboard(): Promise<Dashboard> {
     },
     alerts: {
       pendingIngredients: pending.length,
-      priceAlerts: priceAlerts.length,
+      priceAlerts: priceAlerts.filter((a) => a.alert !== null).length,
       lossDishes: priceAlerts.filter((a) => a.alert === 'LOSS').length,
+      optionAlerts: new Set(
+        priceAlerts.flatMap((a) =>
+          a.options
+            .filter((o) => o.alert)
+            .map((o) => (o.kind === 'SIZE' ? `${o.optionId}-${a.dishId}` : `${o.optionId}`)),
+        ),
+      ).size,
       cancelledToday: t?.cancelled ?? 0,
       belowCostToday: t?.belowCost ?? 0,
       unclosedDays: monthData.flags.unclosedDays,
       backup,
+      lowStock,
       staleOpenOrders: openOrders.filter((o) => fromDbDate(o.businessDate) < today).length,
       lockedPins,
     },

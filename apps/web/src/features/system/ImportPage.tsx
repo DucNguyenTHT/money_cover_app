@@ -7,11 +7,12 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card, Segmented } from '@/components/ui/controls';
 import { DataTable } from '@/components/ui/DataTable';
-import { Field, Input } from '@/components/ui/Input';
+import { Field } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok, tokenStore } from '@/lib/api-client';
-import { useBusinessToday } from '@/lib/business-date';
+import { useBusinessDateState } from '@/lib/business-date';
+import { DateInput } from '@/components/DateInput';
 
 const KINDS: { value: ImportKind; label: string; hint: string; dated?: string }[] = [
   { value: 'ingredients', label: 'Nguyên liệu', hint: 'Mã trùng với nguyên liệu đã có sẽ được cập nhật.' },
@@ -33,6 +34,11 @@ const KINDS: { value: ImportKind; label: string; hint: string; dated?: string }[
     hint: 'Tạo một phiếu tồn đầu với số lượng và giá vốn hiện có trong kho.',
     dated: 'Ngày tồn đầu',
   },
+  {
+    value: 'options',
+    label: 'Tuỳ chọn món',
+    hint: 'Size, topping, yêu cầu. Nhóm và tuỳ chọn trùng tên sẽ được cập nhật. Nhập nguyên liệu và món trước.',
+  },
 ];
 
 const toBase64 = (file: File) =>
@@ -47,8 +53,7 @@ export function ImportPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [kind, setKind] = useState<ImportKind>('ingredients');
-  const bizToday = useBusinessToday();
-  const [date, setDate] = useState(bizToday);
+  const [date, setDate] = useBusinessDateState();
   const [file, setFile] = useState<{ name: string; b64: string } | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const meta = KINDS.find((k) => k.value === kind)!;
@@ -106,15 +111,7 @@ export function ImportPage() {
           </Button>
           {meta.dated && (
             <Field label={meta.dated}>
-              {(id) => (
-                <Input
-                  id={id}
-                  type="date"
-                  className="w-44"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              )}
+              {(id) => <DateInput id={id} className="w-44" value={date} onChange={(v) => setDate(v)} />}
             </Field>
           )}
           <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-ctl bg-primary-soft px-3.5 text-sm font-semibold text-primary-ink hover:bg-primary-soft-2">

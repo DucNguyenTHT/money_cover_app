@@ -9,6 +9,7 @@ import type { DayClosingDto, DayPreview } from '../../contracts/orders.contract'
 import { fromDbDate, toDbDate } from '../../domain/business-date';
 import { PAYMENT_METHODS, type PaymentMethod } from '../../domain/enums';
 import { D, ZERO } from '../../domain/money';
+import { dayTotals } from '../cash/cash.service';
 
 const emptyByMethod = () =>
   Object.fromEntries(PAYMENT_METHODS.map((m) => [m, '0'])) as Record<PaymentMethod, string>;
@@ -41,6 +42,8 @@ export async function preview(date: string): Promise<DayPreview> {
     for (const p of o.payments) byMethod.set(p.method, byMethod.get(p.method)!.add(p.amount.toString()));
   const sum = (f: (o: (typeof paid)[number]) => { toString(): string }) =>
     paid.reduce((s, o) => s.add(f(o).toString()), ZERO).toString();
+  const book = await dayTotals(prisma, branchId, date);
+  const cashSales = byMethod.get('CASH')!;
   const closing = await prisma.dayClosing.findUnique({
     where: { branchId_businessDate: { branchId, businessDate: day } },
   });
@@ -56,7 +59,10 @@ export async function preview(date: string): Promise<DayPreview> {
       PaymentMethod,
       string
     >,
-    expectedCash: byMethod.get('CASH')!.toString(),
+    cashSales: cashSales.toString(),
+    cashIn: book.in.toString(),
+    cashOut: book.out.toString(),
+    expectedCash: cashSales.add(book.in).sub(book.out).toString(),
     closing: closing ? await toDto(closing) : null,
   };
 }

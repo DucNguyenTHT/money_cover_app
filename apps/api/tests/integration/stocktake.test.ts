@@ -119,6 +119,21 @@ describe('stocktake', () => {
     expect(await prisma.stocktakeDishAllocation.count()).toBe(0);
   });
 
+  it('first day: sales made the day of the opening stock are part of the first stocktake', async () => {
+    const { c, beef, pho, bun, today } = await setup();
+    await prisma.receipt.create({
+      data: { branchId: await branchId(), kind: 'OPENING', date: toDbDate(today), createdById: 1 },
+    });
+    const st = (await c.stocktake.create({ body: { date: today, note: null } })).body as StocktakeDetail;
+    await c.stocktake.update({
+      params: { id: st.id },
+      body: { note: null, items: [{ ingredientId: beef.id, actualQty: '5' }] },
+    });
+    const d = (await c.stocktake.complete({ params: { id: st.id }, body: {} })).body as StocktakeDetail;
+    expect(d.periodFrom! < today).toBe(true);
+    expect(d.dishAllocations!.map((a) => a.dishId).sort()).toEqual([pho, bun].sort());
+  });
+
   it('a surplus becomes a lot at the last price; unused ingredients go to general loss', async () => {
     const { c, beef, onion, today } = await setup();
     const st = (await c.stocktake.create({ body: { date: today, note: null } })).body as StocktakeDetail;

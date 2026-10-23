@@ -417,12 +417,39 @@ function flowsSection() {
       ['Huỷ đơn / món', 'huỷ không xoá; món đã chế biến ghi hao', 'orders CANCELLED · audit_logs'],
       [
         'Chốt ngày',
-        'đối chiếu tiền mặt; ngày còn đơn mở không chốt được (cảnh báo đơn treo từ ngày trước)',
-        'day_closings',
+        'tiền mặt dự kiến = tiền mặt bán + thu − chi sổ quỹ; ngày còn đơn mở không chốt được; sổ quỹ đổi sau khi chốt → cần chốt lại',
+        'day_closings · cash_entries',
+      ],
+    ]),
+    flow('Sổ quỹ tiền mặt', 'Tiền vào / ra két ngoài bán hàng, để chốt ngày két khớp.', [
+      [
+        'Ghi thu / chi',
+        'tiền lẻ đầu ngày, chi chợ, nộp ngân hàng…; không ghi ngày tương lai / tháng đã khoá',
+        'cash_entries',
+      ],
+      [
+        'Tự ghi từ màn khác',
+        'trả nhà cung cấp, trả lương, tạm ứng bằng tiền mặt → modules/cash addTx trong cùng transaction',
+        'cash_entries.source · source_id',
+      ],
+      [
+        'Huỷ',
+        'có lý do, không xoá; người ghi trong ngày hoặc ADMIN; khoản tự ghi chỉ huỷ ở màn gốc',
+        'cancelled_at',
       ],
     ]),
     flow('Kho', 'Giá vốn FIFO theo từng lô nhập.', [
       ['Phiếu nhập', 'mỗi dòng tạo một lô giữ giá nhập; tất toán nợ kho', 'receipts · receipt_items · lots'],
+      [
+        'Nhà cung cấp & công nợ',
+        'phiếu gắn nhà cung cấp; mua chịu / trả ngay (tiền mặt → sổ quỹ); nợ = phiếu − đã trả, trả phiếu cũ trước',
+        'suppliers · supplier_payments · receipts.supplier_id',
+      ],
+      [
+        'Cần nhập hàng',
+        'lượng dùng 14 ngày, tồn tối thiểu → hết / sắp hết, gợi ý nhập theo đơn vị mua → tạo phiếu nhập',
+        'ingredients.min_stock · settings.reorder_days',
+      ],
       ['Ảnh hoá đơn', 'đính kèm ngay khi nhập (tuỳ chọn)', 'documents.receipt_id'],
       [
         'Xuất kho',
@@ -443,7 +470,10 @@ function flowsSection() {
         'giá vốn = định mức × giá nhập gần nhất; mỗi app một cột lãi theo phí sàn riêng; % chi phí chung chỉ tính tháng bán trọn vẹn',
         'overhead_expenses · delivery_apps',
       ],
-      ['Cảnh báo giá', 'món lỗ (ở bất kỳ app nào) / vượt % mục tiêu sau khi giá nhập đổi'],
+      [
+        'Cảnh báo giá',
+        'món lỗ (ở bất kỳ app nào) / vượt % mục tiêu sau khi giá nhập đổi; topping xét riêng, size xét cả phần',
+      ],
       [
         'Áp dụng giá mới',
         'theo ngày, cho quán / app chung / từng app; không lùi về ngày món đã bán; có lịch sử giá',
@@ -455,8 +485,23 @@ function flowsSection() {
         'option_groups · options · option_ingredients · dish_option_groups',
       ],
     ]),
+    flow('Nhân viên & lương', 'Chấm công → bảng lương tháng → chi phí chung.', [
+      ['Nhân viên, ca', 'lương theo giờ / theo tháng; tài khoản gắn để tự vào / ra ca', 'employees · shifts'],
+      [
+        'Chấm công',
+        'mỗi người mỗi ngày: ca + giờ vào / ra (qua đêm tính sang hôm sau); "Điền đủ ca"',
+        'attendance',
+      ],
+      ['Tạm ứng', 'trừ vào bảng lương tháng đó; tiền mặt → sổ quỹ', 'salary_advances'],
+      [
+        'Chốt bảng lương',
+        'giờ × lương giờ (hoặc lương tháng) + thưởng − trừ; tổng → chi phí chung "Lương"; khoá chấm công tháng',
+        'payrolls · payroll_lines · overhead_expenses',
+      ],
+      ['Trả lương', 'từng người sau khi chốt; tiền mặt → sổ quỹ', 'payroll_lines.paid_at'],
+    ]),
     flow('Kỳ kế toán (tháng)', 'Lãi lỗ tổng hợp theo tháng; quý / năm = cộng các tháng.', [
-      ['Chi phí chung', 'mặt bằng, lương, điện nước… theo tháng', 'overhead_expenses'],
+      ['Chi phí chung', 'mặt bằng, lương (tự từ bảng lương), điện nước… theo tháng', 'overhead_expenses'],
       ['Báo cáo lãi lỗ', 'TypedSQL lấy số thô → domain/period/pnl.ts dựng các dòng', 'prisma/sql/*.sql'],
       [
         'Thuế tạm tính',
@@ -492,12 +537,17 @@ function flowsSection() {
       ],
       [
         'Chứng từ qua Telegram',
-        'chạy nền: các file chưa gửi theo thứ tự id, ≤ 100 file / lần, ~3 giây / file; lỗi → dừng, lần sau gửi tiếp',
-        'document_files · settings.telegram.docsCursor',
+        'chạy nền: các file chưa gửi theo thứ tự id, ≤ 100 file / lần, ~3 giây / file; lỗi → dừng, lần sau gửi tiếp; giữ file_id',
+        'document_files.telegram_file_id · settings.telegram.docsCursor',
       ],
       ['Ghi kết quả', 'lần chạy gần nhất / lần thành công gần nhất', 'settings.backup_status'],
       ['Cảnh báo', 'chuông + Tổng quan: chưa có / lỗi / quá 2 ngày / chưa gửi được lên Drive / Telegram'],
       ['Khôi phục', 'scripts/restore-db.ps1 với file .dump (trên máy, hoặc tải từ Telegram / Drive)'],
+      [
+        'Lấy lại ảnh chứng từ',
+        'file thiếu trên máy → tải lại từ Telegram theo file_id (≤ 20 MB), phải khớp sha256',
+        'document_files.telegram_file_id · sha256',
+      ],
     ]),
   ].join('');
 }

@@ -9,6 +9,10 @@ import { defineConfig, devices } from '@playwright/test';
  * Against an app that is already running (CI, the production stack): set
  *   BASE_URL            — e.g. http://localhost:5173
  *   E2E_USER / E2E_PASS — an ADMIN account with PIN 2580 and the password already changed
+ *   ONBOARD_PASS        — only on a fresh install: the temporary `admin` password, to run the onboarding test
+ *
+ * The onboarding test (a brand-new shop: first login → Excel import → first sale → P&L) runs first, before the
+ * other flows add their own sales.
  */
 const external = !!process.env.BASE_URL;
 const E2E_DB =
@@ -16,7 +20,11 @@ const E2E_DB =
 if (!external) {
   process.env.E2E_USER ??= 'e2e_admin';
   process.env.E2E_PASS ??= 'E2e-pass-2026';
+  // The fresh e2e database leaves the seeded `admin` at first login with this temporary password (setup-db.mjs).
+  process.env.ONBOARD_PASS ??= 'Tam-thoi-2026';
 }
+const desktop = { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } };
+const onboarding = /onboarding\.spec\.ts/;
 
 export default defineConfig({
   testDir: './tests',
@@ -33,7 +41,8 @@ export default defineConfig({
     timezoneId: 'Asia/Ho_Chi_Minh',
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'onboarding', testMatch: onboarding, use: desktop },
+    { name: 'desktop', testIgnore: onboarding, use: desktop, dependencies: ['onboarding'] },
   ],
   webServer: external
     ? undefined
@@ -52,6 +61,7 @@ export default defineConfig({
             UPLOAD_DIR: 'storage/e2e-documents',
             E2E_USER: process.env.E2E_USER!,
             E2E_PASS: process.env.E2E_PASS!,
+            ONBOARD_PASS: process.env.ONBOARD_PASS!,
           },
         },
         {

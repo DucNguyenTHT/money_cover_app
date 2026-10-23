@@ -65,9 +65,15 @@ App chạy HTTPS bằng chứng chỉ do máy chủ tự cấp (cần cho PWA v�
    File mẫu món có cột **Giá app** (giá chung) và một cột **Giá <tên app>** cho mỗi app — tạo app ở bước 4 trước khi tải mẫu.
    Sau này đổi giá từng app ở _Thực đơn → món → Giá bán_.
    Size / topping / yêu cầu (ít cay…): tạo ở _Thực đơn → Tuỳ chọn món_ (có mẫu sẵn) rồi gắn cho món ở
-   _Sửa món → Tuỳ chọn_.
+   _Sửa món → Tuỳ chọn_ — hoặc nhập Excel loại **Tuỳ chọn món** (cột "Áp dụng cho món" gắn luôn vào món).
+   _Nguyên liệu_ có ô **Tồn tối thiểu** (hoặc cột cùng tên trong file Excel) để _Kho → Cần nhập hàng_ nhắc sớm.
 6. **Hệ thống → Cài đặt → Telegram** (khuyên dùng, 3 phút, xem `setup-telegram.md`) hoặc **Google Drive**
    (xem `setup-google-drive.md`) để bản sao lưu hằng đêm có thêm một bản ngoài máy chủ.
+7. **Nhân viên → Nhân viên & ca làm**: thêm nhân viên (lương theo giờ / theo tháng), các ca (sáng, chiều…); gắn tài
+   khoản đăng nhập để nhân viên tự bấm vào / ra ca trên máy bán hàng. Xếp lịch ở _Lịch & chấm công_; cuối tháng
+   _Bảng lương_ → Chốt (tổng lương tự vào chi phí chung).
+8. Hằng ngày: tiền lẻ đầu ca, tiền đi chợ, nộp ngân hàng… ghi ở **Sổ quỹ** (tab trên máy bán hàng) để chốt ngày két
+   khớp. Mua chịu thì chọn _Mua chịu_ khi tạo phiếu nhập; trả nợ ở _Kho → Nhà cung cấp & công nợ_.
 
 ## 6. Sao lưu
 
@@ -112,6 +118,8 @@ Lệnh cũng chép lại các ảnh chứng từ còn thiếu từ `backups\docu
 mới, chép thư mục `documents` từ `BACKUP_COPY_DIR` vào `backups\` trước khi chạy lệnh.
 Bản trên Telegram / Google Drive: tải file `.dump` (cuộc trò chuyện Telegram, hoặc thư mục _Kế toán quán - Sao lưu
 dữ liệu_ trên Drive) về `backups\` rồi chạy lệnh trên.
+Ảnh chứng từ vẫn thiếu sau đó (không có bản chép ra ổ ngoài): đăng nhập ADMIN → _Hệ thống → Cài đặt → Telegram_ →
+**Lấy lại … file từ Telegram** (cần cùng bot đã gửi file).
 Máy mới: làm lại bước 1–3 với **cùng `.env.prod`**, sau đó chạy lệnh khôi phục.
 
 **Nên thử khôi phục 1 lần ngay sau khi cài** (sang máy khác hoặc DB trống) để chắc chắn bản sao lưu dùng được.

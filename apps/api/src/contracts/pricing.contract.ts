@@ -21,6 +21,31 @@ const channelCost = z.object({
 });
 export type ChannelCostDto = z.infer<typeof channelCost>;
 
+const alertLevel = z.enum(['LOSS', 'OVER_TARGET']).nullable();
+
+/** Profit of one option (size / topping) of the dish, at the latest purchase prices, in the store. */
+const optionPricing = z.object({
+  optionId: z.number(),
+  groupName: z.string(),
+  name: z.string(),
+  /** SIZE: multiplies the recipe (judged on the whole portion); ADDON: extra ingredients (judged alone). */
+  kind: z.enum(['SIZE', 'ADDON']),
+  optionPrice: decimalString,
+  recipeFactor: decimalString,
+  /** What the option adds to the portion cost. */
+  extraCost: decimalString,
+  /** ADDON: the option price; SIZE: dish price + option price (null when the dish has no price). */
+  price: decimalString.nullable(),
+  cost: decimalString,
+  /** After overhead. */
+  profit: decimalString.nullable(),
+  foodCostPct: decimalString.nullable(),
+  suggestedPrice: decimalString.nullable(),
+  alert: alertLevel,
+  missingPrices: z.array(z.string()),
+});
+export type OptionPricingDto = z.infer<typeof optionPricing>;
+
 export const pricingRow = z.object({
   dishId: z.number(),
   code: z.string(),
@@ -52,6 +77,10 @@ export const pricingRow = z.object({
     }),
   ),
   alert: z.enum(['LOSS', 'OVER_TARGET']).nullable(),
+  /** Active options of the dish's active groups. */
+  options: z.array(optionPricing),
+  /** Worst alert among the options. */
+  optionAlert: alertLevel,
 });
 export type PricingRow = z.infer<typeof pricingRow>;
 
@@ -120,7 +149,7 @@ export const pricingContract = c.router(
       path: '/api/pricing/alerts',
       responses: { 200: z.array(pricingRow), ...commonErrors },
       metadata: admin,
-      summary: 'Món đang lỗ hoặc vượt % nguyên liệu mục tiêu theo giá nhập gần nhất',
+      summary: 'Món (hoặc tuỳ chọn của món) đang lỗ / vượt % nguyên liệu mục tiêu theo giá nhập gần nhất',
     },
   },
   { strictStatusCodes: true },

@@ -17,4 +17,6 @@ export const telegramRouter = s.router(telegramContract, {
     body: await telegram.setChat(currentUser(req).id, body.chatId, body.title),
   }),
   clear: async ({ req }) => ({ status: 200, body: await telegram.clear(currentUser(req).id) }),
+  restoreStatus: async () => ({ status: 200, body: await telegram.restoreStatus() }),
+  restore: async ({ req }) => ({ status: 200, body: await telegram.restoreDocuments(currentUser(req).id) }),
 });

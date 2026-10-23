@@ -2,10 +2,9 @@ import { Fragment, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
-import type { ChannelCostDto, PricingRow } from '@ketoan/api/contracts';
+import type { ChannelCostDto, OptionPricingDto, PricingRow } from '@ketoan/api/contracts';
 import { D, suggestAppPrice, suggestStorePrice, type Channel } from '@ketoan/api/domain';
 import { PageHeader } from '@/components/PageHeader';
-import { today } from '@/components/MonthPicker';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card, EmptyState, Select } from '@/components/ui/controls';
 import { DataTable } from '@/components/ui/DataTable';
@@ -14,7 +13,9 @@ import { useToast } from '@/components/ui/Toast';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { money, parseMoney } from '@/lib/format';
-import { useBusinessToday } from '@/lib/business-date';
+import { useBusinessDateState } from '@/lib/business-date';
+import { DateInput } from '@/components/DateInput';
+import { optionAlertRows, type OptionAlertRow } from '@/lib/option-alerts';
 
 const CH: { key: Channel; label: string }[] = [
   { key: 'DINE_IN', label: 'Tại quán' },
@@ -307,6 +308,7 @@ export function CostSheetPage() {
                 />
               </Card>
             )}
+            {row.options.length > 0 && <OptionsCard options={row.options} />}
             <Card>
               <h2 className="border-b border-line px-4 py-3 font-semibold text-ink-strong">
                 Định mức đang dùng
@@ -425,6 +427,167 @@ export function CostSheetPage() {
   );
 }
 
+const factorText = (f: string) => `×${String(Number(f)).replace('.', ',')}`;
+
+function OptionAlertBadge({ alert }: { alert: OptionPricingDto['alert'] }) {
+  if (alert === 'LOSS') return <Badge tone="bad">Lỗ</Badge>;
+  if (alert === 'OVER_TARGET') return <Badge tone="warn">Vượt mục tiêu</Badge>;
+  return null;
+}
+
+/** What each size / topping of the dish earns at the latest purchase prices (store). */
+function OptionsCard({ options }: { options: OptionPricingDto[] }) {
+  const missing = [...new Set(options.flatMap((o) => o.missingPrices))];
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+        <h2 className="font-semibold text-ink-strong">Tuỳ chọn / topping</h2>
+        <Link to="/admin/menu/options" className="text-[13px] text-primary-ink hover:underline">
+          Sửa giá tuỳ chọn
+        </Link>
+      </div>
+      {missing.length > 0 && (
+        <p className="mx-4 mt-3 flex items-center gap-2 rounded-ctl bg-warn-soft px-3 py-2 text-[13px] text-warn">
+          <AlertTriangle size={16} /> Chưa có giá nhập cho: {missing.join(', ')}.
+        </p>
+      )}
+      <DataTable<OptionPricingDto>
+        rows={options}
+        rowKey={(o) => o.optionId}
+        columns={[
+          {
+            key: 'name',
+            header: 'Tuỳ chọn',
+            cell: (o) => (
+              <span className="flex flex-col">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-muted">{o.groupName} ›</span> {o.name}
+                  {o.kind === 'SIZE' && <Badge tone="primary">Định mức {factorText(o.recipeFactor)}</Badge>}
+                  <OptionAlertBadge alert={o.alert} />
+                </span>
+                {o.kind === 'SIZE' && o.price && (
+                  <span className="text-xs text-faint">
+                    Cả phần: giá {money(o.price)}, giá vốn {money(o.cost)}
+                  </span>
+                )}
+              </span>
+            ),
+          },
+          {
+            key: 'price',
+            header: 'Giá cộng thêm',
+            align: 'right',
+            cell: (o) => <span className="num">{money(o.optionPrice)}</span>,
+          },
+          {
+            key: 'cost',
+            header: 'Giá vốn thêm',
+            align: 'right',
+            cell: (o) => <span className="num">{money(o.extraCost)}</span>,
+          },
+          {
+            key: 'fc',
+            header: '% nguyên liệu',
+            align: 'right',
+            cell: (o) => (
+              <span className="num" title={o.kind === 'SIZE' ? 'Tính trên cả phần cỡ này' : undefined}>
+                {pctText(o.foodCostPct)}
+              </span>
+            ),
+          },
+          {
+            key: 'profit',
+            header: 'Lãi',
+            align: 'right',
+            secondary: true,
+            cell: (o) =>
+              o.profit === null ? (
+                '—'
+              ) : (
+                <span className={cn('num', Number(o.profit) < 0 && 'text-bad')}>{money(o.profit)}</span>
+              ),
+          },
+          {
+            key: 'sugg',
+            header: 'Gợi ý cộng thêm',
+            align: 'right',
+            cell: (o) => <b className="num">{o.suggestedPrice ? money(o.suggestedPrice) : '—'}</b>,
+          },
+        ]}
+      />
+      <p className="px-4 py-2 text-xs text-faint">
+        Topping tính riêng giá của nó so với nguyên liệu thêm; size tính trên cả phần (giá món + cộng thêm).
+        Lãi đã trừ chi phí chung. Gợi ý giữ % nguyên liệu mục tiêu trên phần tăng thêm.
+      </p>
+    </Card>
+  );
+}
+
+/** Price alerts on options (sizes per dish, add-ons once). */
+function OptionAlertsCard({ rows }: { rows: OptionAlertRow[] }) {
+  return (
+    <Card className="mt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+        <h2 className="font-semibold text-ink-strong">Tuỳ chọn / topping cần xem giá</h2>
+        <Link to="/admin/menu/options" className="text-[13px] text-primary-ink hover:underline">
+          Sửa giá tuỳ chọn
+        </Link>
+      </div>
+      <DataTable<OptionAlertRow>
+        rows={rows}
+        rowKey={(o) => o.key}
+        columns={[
+          {
+            key: 'name',
+            header: 'Tuỳ chọn',
+            cell: (o) => (
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="text-muted">{o.groupName} ›</span> {o.name}
+                {o.dishName && <span className="text-muted">· {o.dishName}</span>}
+                <OptionAlertBadge alert={o.alert} />
+              </span>
+            ),
+          },
+          {
+            key: 'price',
+            header: 'Giá cộng thêm',
+            align: 'right',
+            cell: (o) => <span className="num">{money(o.optionPrice)}</span>,
+          },
+          {
+            key: 'cost',
+            header: 'Giá vốn thêm',
+            align: 'right',
+            cell: (o) => <span className="num">{money(o.extraCost)}</span>,
+          },
+          {
+            key: 'fc',
+            header: '% NL',
+            align: 'right',
+            cell: (o) => <span className="num">{pctText(o.foodCostPct)}</span>,
+          },
+          {
+            key: 'sugg',
+            header: 'Gợi ý cộng thêm',
+            align: 'right',
+            cell: (o) => <b className="num">{o.suggestedPrice ? money(o.suggestedPrice) : '—'}</b>,
+          },
+        ]}
+        actions={(o) =>
+          o.dishId ? (
+            <Link
+              to={`/admin/menu/cost-sheet?dish=${o.dishId}`}
+              className="inline-flex h-[34px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-ctl bg-primary-soft px-3 text-[13px] font-semibold text-primary-ink"
+            >
+              Xem món <ArrowRight size={14} />
+            </Link>
+          ) : null
+        }
+      />
+    </Card>
+  );
+}
+
 type AppSuggestion = { id: number; price: string | null };
 
 /** Save the suggested store price and each app's suggested price as that app's own price. */
@@ -457,8 +620,7 @@ function ApplyPrices({
 }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const bizToday = useBusinessToday();
-  const [from, setFrom] = useState(bizToday);
+  const [from, setFrom] = useBusinessDateState();
   const apply = useMutation({
     mutationFn: () => applySuggested(dishId, store, apps, from),
     onSuccess: () => {
@@ -472,7 +634,7 @@ function ApplyPrices({
   return (
     <div className="mt-4 grid gap-2 border-t border-line pt-3">
       <Field label="Áp dụng từ ngày">
-        {(id) => <Input id={id} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}
+        {(id) => <DateInput id={id} value={from} onChange={(v) => setFrom(v)} />}
       </Field>
       <Button
         variant="primary"
@@ -494,8 +656,10 @@ export function PriceAlertsPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [picked, setPicked] = useState<number[]>([]);
-  const [from, setFrom] = useState(today);
-  const rows = alerts.data ?? [];
+  const [from, setFrom] = useBusinessDateState();
+  const all = alerts.data ?? [];
+  const rows = all.filter((r) => r.alert !== null);
+  const optionRows = optionAlertRows(all);
   const applicable = rows.filter((r) => r.suggestedStorePrice);
   const allOn = applicable.length > 0 && applicable.every((r) => picked.includes(r.dishId));
 
@@ -538,11 +702,10 @@ export function PriceAlertsPage() {
           </label>
           <span className="flex-1" />
           <span className="text-[13px] text-muted">Áp dụng từ</span>
-          <Input
-            type="date"
+          <DateInput
             aria-label="Áp dụng từ ngày"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(v) => setFrom(v)}
             className="h-9 w-40"
           />
           <Button
@@ -557,10 +720,17 @@ export function PriceAlertsPage() {
       )}
       <Card>
         <DataTable<PricingRow>
-          rows={alerts.data}
+          rows={alerts.data && rows}
           loading={alerts.isLoading}
           rowKey={(r) => r.dishId}
-          empty={<EmptyState title="Không có cảnh báo" hint="Tất cả món đang trong mục tiêu." />}
+          empty={
+            <EmptyState
+              title="Không có cảnh báo"
+              hint={
+                optionRows.length ? 'Giá các món đang trong mục tiêu.' : 'Tất cả món đang trong mục tiêu.'
+              }
+            />
+          }
           columns={[
             {
               key: 'name',
@@ -653,6 +823,7 @@ export function PriceAlertsPage() {
           )}
         />
       </Card>
+      {optionRows.length > 0 && <OptionAlertsCard rows={optionRows} />}
     </div>
   );
 }

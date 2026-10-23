@@ -1,14 +1,17 @@
 import type { Role } from '@ketoan/api/domain';
 import {
   ListPlus,
+  PackageSearch,
   BarChart3,
   Bike,
   BookOpen,
+  CalendarClock,
   Boxes,
   Calculator,
   ChefHat,
   ClipboardList,
   Coins,
+  Contact,
   FileImage,
   FileSpreadsheet,
   Landmark,
@@ -18,7 +21,10 @@ import {
   ShieldCheck,
   ShoppingCart,
   Store,
+  Truck,
+  UserCog,
   Users,
+  Wallet,
   Warehouse,
   type LucideIcon,
 } from 'lucide-react';
@@ -98,6 +104,8 @@ export const NAV: NavModule[] = [
         title: 'Nhập & xuất',
         items: [
           { label: 'Phiếu nhập', icon: Receipt, path: '/admin/inventory/receipts' },
+          { label: 'Cần nhập hàng', icon: PackageSearch, path: '/admin/inventory/reorder' },
+          { label: 'Nhà cung cấp & công nợ', icon: Truck, path: '/admin/inventory/suppliers' },
           {
             label: 'Phiếu xuất',
             icon: ClipboardList,
@@ -162,8 +170,25 @@ export const NAV: NavModule[] = [
       {
         title: 'Kế toán',
         items: [
+          { label: 'Sổ quỹ tiền mặt', icon: Wallet, path: '/admin/accounting/cash' },
           { label: 'Chi phí chung', icon: Coins, path: '/admin/accounting/overheads' },
           { label: 'Khoá sổ tháng', icon: ShieldCheck, path: '/admin/accounting/periods' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'staff',
+    label: 'Nhân viên',
+    path: '/admin/staff/attendance',
+    roles: A,
+    groups: [
+      {
+        title: 'Nhân viên',
+        items: [
+          { label: 'Lịch & chấm công', icon: CalendarClock, path: '/admin/staff/attendance' },
+          { label: 'Bảng lương', icon: Contact, path: '/admin/staff/payroll' },
+          { label: 'Nhân viên & ca làm', icon: UserCog, path: '/admin/staff/employees' },
         ],
       },
     ],

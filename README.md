@@ -1,10 +1,11 @@
 # Quán ăn — Bán hàng (POS) & Kế toán nội bộ
 
 Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR, đơn app giao hàng), kho FIFO theo lô (nhập, xuất, nợ kho,
-kiểm kê), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá, size / topping), lãi lỗ tháng / quý / năm,
-khoá sổ, lưu trữ chứng từ (ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên Google Drive), thuế hộ kinh doanh
-(GTGT + TNCN tạm tính, so sánh 2 cách tính, báo cáo "Thuế phải nộp") và sao lưu dữ liệu tự động mỗi đêm (kèm bản
-trên Telegram / Google Drive).
+kiểm kê, tồn tối thiểu & gợi ý nhập hàng), nhà cung cấp & công nợ, sổ quỹ tiền mặt, nhân viên (ca làm, chấm công,
+bảng lương, tạm ứng), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá, lãi của size /
+topping), lãi lỗ tháng / quý / năm, khoá sổ, lưu trữ chứng từ (ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên
+Google Drive), thuế hộ kinh doanh (GTGT + TNCN tạm tính, so sánh 2 cách tính, báo cáo "Thuế phải nộp") và sao lưu dữ
+liệu tự động mỗi đêm (kèm bản trên Telegram / Google Drive; ảnh chứng từ lấy lại được từ Telegram).
 
 | App        | Nội dung                                                                                                                                                  |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -36,13 +37,13 @@ Mở http://localhost:5173, đăng nhập `admin` bằng mật khẩu tạm in r
 
 ## Lệnh thường dùng
 
-| Lệnh                                                                      | Việc                                                                                                                               |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm test`                                                               | unit test (domain) + integration test (api, DB test)                                                                               |
-| `pnpm e2e`                                                                | Playwright — tự chạy app riêng trên DB `ketoan_e2e` (không đụng DB dev); vào app có sẵn thì đặt `BASE_URL`, `E2E_USER`, `E2E_PASS` |
-| `pnpm lint` / `pnpm typecheck` / `pnpm build`                             | kiểm tra & build                                                                                                                   |
-| `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:reset` | quản lý DB                                                                                                                         |
-| `pnpm --filter @ketoan/api db:reset-admin`                                | quên mật khẩu `admin`: in mật khẩu tạm mới (phải đổi khi đăng nhập)                                                                |
+| Lệnh                                                                      | Việc                                                                                                                                                   |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm test`                                                               | unit test (domain) + integration test (api, DB test)                                                                                                   |
+| `pnpm e2e`                                                                | Playwright — tự chạy app riêng trên DB `ketoan_e2e` (không đụng DB dev, có cả test cài mới); vào app có sẵn thì đặt `BASE_URL`, `E2E_USER`, `E2E_PASS` |
+| `pnpm lint` / `pnpm typecheck` / `pnpm build`                             | kiểm tra & build                                                                                                                                       |
+| `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:reset` | quản lý DB                                                                                                                                             |
+| `pnpm --filter @ketoan/api db:reset-admin`                                | quên mật khẩu `admin`: in mật khẩu tạm mới (phải đổi khi đăng nhập)                                                                                    |
 
 Commit chạy `lint-staged` (eslint + prettier) qua husky. CI (`.github/workflows/ci.yml`) chạy lint, typecheck, test, build và e2e.
 

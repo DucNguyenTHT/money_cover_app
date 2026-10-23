@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   household_pit_method: 'INCOME',
   einvoice_registered: false,
   backup_hour: 2,
+  reorder_days: 3,
   backup_drive: true,
   backup_telegram: true,
   backup_telegram_documents: true,

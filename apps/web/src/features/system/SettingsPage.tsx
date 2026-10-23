@@ -297,6 +297,17 @@ export function SettingsPage() {
               </Select>
             )}
           </Field>
+          <Field label="Gợi ý nhập hàng đủ dùng (ngày)" hint="Kho → Cần nhập hàng">
+            {(id, d) => (
+              <Input
+                id={id}
+                aria-describedby={d}
+                inputMode="numeric"
+                className="num text-right"
+                {...num('reorder_days')}
+              />
+            )}
+          </Field>
           <div className="flex flex-col gap-1.5">
             <span className="text-[13px] font-medium">Tỷ lệ chi phí chung</span>
             <Segmented

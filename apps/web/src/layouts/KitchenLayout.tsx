@@ -3,6 +3,7 @@ import { Link, Outlet, useNavigate } from 'react-router';
 import { LogOut, ShoppingCart, WifiOff } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { useOnline } from '@/lib/socket';
+import { ClockInButton } from '@/components/ClockInButton';
 
 export function KitchenLayout() {
   const { user, logout } = useAuth();
@@ -23,6 +24,7 @@ export function KitchenLayout() {
           {clock.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
         </span>
         <span className="hidden text-[13px] sm:inline">{user?.fullName}</span>
+        <ClockInButton />
         {user?.role !== 'KITCHEN' && (
           <Link
             to="/pos"

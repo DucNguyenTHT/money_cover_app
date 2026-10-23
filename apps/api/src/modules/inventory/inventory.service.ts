@@ -5,8 +5,11 @@ import { writeAudit } from '../../core/audit';
 import { assertPeriodOpen } from '../../core/period-lock';
 import { defaultBranchId } from '../../core/branch';
 import { fromDbDate, toDbDate } from '../../domain/business-date';
-import { D, ZERO, roundVnd, sum } from '../../domain/money';
+import { D, ZERO, roundVnd, sum, type Decimal } from '../../domain/money';
+import { reorder } from '../../domain/inventory/reorder';
 import { toStockUnits } from '../../domain/inventory/fifo';
+import { businessToday, getSettings } from '../settings/settings.service';
+import * as supplierSvc from '../suppliers/suppliers.service';
 import type {
   IssueDetail,
   IssueInput,
@@ -52,7 +55,12 @@ type ReceiptRow = Prisma.ReceiptGetPayload<{
   };
 }>;
 
-function receiptView(r: ReceiptRow, names: Map<number, string>, locked: Set<string>): ReceiptDetail {
+function receiptView(
+  r: ReceiptRow,
+  names: Map<number, string>,
+  locked: Set<string>,
+  paid: Map<number, Decimal>,
+): ReceiptDetail {
   const items = r.items.map((i) => ({
     ingredientId: i.ingredientId,
     ingredientName: i.ingredient.name,
@@ -70,6 +78,8 @@ function receiptView(r: ReceiptRow, names: Map<number, string>, locked: Set<stri
     kind: r.kind,
     date,
     supplier: r.supplier,
+    supplierId: r.supplierId,
+    paid: r.supplierId !== null && r.kind === 'PURCHASE' ? (paid.get(r.id) ?? ZERO).toString() : null,
     note: r.note,
     itemCount: items.length,
     total: sum(items.map((i) => i.amount)).toString(),
@@ -98,8 +108,12 @@ export async function listReceipts(month: string): Promise<ReceiptSummary[]> {
     rows.map((r) => r.createdById),
   );
   const locked = await lockedMonths(prisma, branchId);
+  const paid = await supplierSvc.receiptPaid(
+    prisma,
+    rows.flatMap((r) => (r.supplierId === null ? [] : [r.supplierId])),
+  );
   return rows.map((r) => {
-    const { items: _items, note: _note, ...summary } = receiptView(r, names, locked);
+    const { items: _items, note: _note, ...summary } = receiptView(r, names, locked, paid);
     return summary;
   });
 }
@@ -107,20 +121,37 @@ export async function listReceipts(month: string): Promise<ReceiptSummary[]> {
 export async function getReceipt(id: number, db: Db = prisma): Promise<ReceiptDetail> {
   const r = await db.receipt.findUnique({ where: { id }, include: receiptInclude });
   if (!r) throw notFound('Phiếu nhập');
-  return receiptView(r, await userNames(db, [r.createdById]), await lockedMonths(db, r.branchId));
+  return receiptView(
+    r,
+    await userNames(db, [r.createdById]),
+    await lockedMonths(db, r.branchId),
+    await supplierSvc.receiptPaid(db, r.supplierId === null ? [] : [r.supplierId]),
+  );
 }
 
+/** Supplier names for the receipt form's suggestions. */
 export async function suppliers() {
-  const rows = await prisma.receipt.findMany({
-    where: { supplier: { not: null } },
-    distinct: ['supplier'],
-    select: { supplier: true },
-    orderBy: { supplier: 'asc' },
+  const rows = await prisma.supplier.findMany({
+    where: { active: true },
+    select: { name: true },
+    orderBy: { name: 'asc' },
   });
-  return rows.map((r) => r.supplier!).filter(Boolean);
+  return rows.map((r) => r.name);
 }
 
-async function writeReceipt(tx: Tx, branchId: number, userId: number, input: ReceiptInput) {
+/** Purchases belong to a supplier; one paid on the spot without a supplier name goes to "Mua lẻ". */
+const receiptSupplier = (tx: Tx, input: ReceiptInput, paying: boolean) =>
+  input.kind === 'PURCHASE'
+    ? supplierSvc.resolveTx(tx, input.supplier || (paying ? supplierSvc.WALK_IN_SUPPLIER : null))
+    : Promise.resolve(null);
+
+async function writeReceipt(
+  tx: Tx,
+  branchId: number,
+  userId: number,
+  input: ReceiptInput,
+  supplier: { id: number; name: string } | null,
+) {
   const ings = await tx.ingredient.findMany({
     where: { id: { in: input.items.map((i) => i.ingredientId) } },
   });
@@ -129,11 +160,13 @@ async function writeReceipt(tx: Tx, branchId: number, userId: number, input: Rec
       branchId,
       kind: input.kind,
       date: toDbDate(input.date),
-      supplier: input.kind === 'OPENING' ? null : input.supplier || null,
+      supplier: supplier?.name ?? null,
+      supplierId: supplier?.id ?? null,
       note: input.note || null,
       createdById: userId,
     },
   });
+  let total = ZERO;
   for (const line of input.items) {
     const ing = ings.find((i) => i.id === line.ingredientId);
     if (!ing) throw badRequest('Nguyên liệu không tồn tại');
@@ -142,6 +175,7 @@ async function writeReceipt(tx: Tx, branchId: number, userId: number, input: Rec
       ? toStockUnits(line.qty, line.unitPrice, ing.purchaseFactor.toString())
       : { qty: D(line.qty), unitPrice: D(line.unitPrice) };
     const amount = roundVnd(D(line.qty).mul(line.unitPrice));
+    total = total.add(amount);
     const item = await tx.receiptItem.create({
       data: {
         receiptId: receipt.id,
@@ -165,14 +199,27 @@ async function writeReceipt(tx: Tx, branchId: number, userId: number, input: Rec
     });
     await settlePendingWithLot(tx, lot.id);
   }
-  return receipt.id;
+  return { id: receipt.id, total };
 }
 
 export async function createReceipt(userId: number, input: ReceiptInput) {
   const branchId = await defaultBranchId();
   const id = await inTx(async (tx) => {
     await assertPeriodOpen(tx, input.date);
-    const id = await writeReceipt(tx, branchId, userId, input);
+    const pay = input.kind === 'PURCHASE' ? (input.payment ?? null) : null;
+    const supplier = await receiptSupplier(tx, input, pay !== null);
+    const { id, total } = await writeReceipt(tx, branchId, userId, input, supplier);
+    if (pay && supplier) {
+      const amount = pay.amount === null ? total : D(pay.amount);
+      if (amount.gt(total)) throw badRequest('Số tiền trả ngay lớn hơn tổng tiền phiếu');
+      if (amount.gt(0))
+        await supplierSvc.payTx(
+          tx,
+          supplier.id,
+          { date: input.date, amount: amount.toString(), method: pay.method, receiptId: id, note: null },
+          userId,
+        );
+    }
     await writeAudit(tx, { entity: 'receipt', entityId: id, action: 'CREATE', after: input, userId });
     return id;
   });
@@ -193,15 +240,21 @@ export async function updateReceipt(userId: number, id: number, input: ReceiptIn
   const newId = await inTx(async (tx) => {
     await assertPeriodOpen(tx, before.date);
     await assertPeriodOpen(tx, input.date);
-    // The receipt is rewritten under a new id: attached invoices follow it.
+    // The receipt is rewritten under a new id: attached invoices and payments follow it.
     const docs = await tx.document.findMany({ where: { receiptId: id }, select: { id: true } });
+    const payments = await tx.supplierPayment.findMany({ where: { receiptId: id } });
+    const paying = payments.some((p) => !p.cancelledAt);
+    if (paying && input.kind !== 'PURCHASE')
+      throw badRequest('Phiếu đã có tiền trả nhà cung cấp — không đổi thành phiếu tồn đầu được');
+    const supplier = await receiptSupplier(tx, input, paying);
     await removeReceipt(tx, id);
-    const newId = await writeReceipt(tx, branchId, userId, input);
+    const { id: newId } = await writeReceipt(tx, branchId, userId, input, supplier);
     if (docs.length)
       await tx.document.updateMany({
         where: { id: { in: docs.map((d) => d.id) } },
         data: { receiptId: newId },
       });
+    if (payments.length) await supplierSvc.relinkPaymentsTx(tx, payments, newId, supplier);
     await writeAudit(tx, {
       entity: 'receipt',
       entityId: id,
@@ -220,6 +273,12 @@ export async function deleteReceipt(userId: number, id: number, reason: string) 
   const before = await getReceipt(id);
   await inTx(async (tx) => {
     await assertPeriodOpen(tx, before.date);
+    await supplierSvc.cancelReceiptPaymentsTx(
+      tx,
+      id,
+      `Xoá phiếu nhập PN${String(id).padStart(6, '0')}: ${reason}`,
+      userId,
+    );
     await removeReceipt(tx, id);
     await writeAudit(tx, { entity: 'receipt', entityId: id, action: 'DELETE', reason, before, userId });
   });
@@ -330,9 +389,17 @@ export async function deleteIssue(userId: number, id: number, reason: string) {
 
 // ---------------------------------------------------------------- stock views
 
+/** Recent use is averaged over this many days. */
+const USAGE_DAYS = 14;
+
 export async function stock() {
   const branchId = await defaultBranchId();
-  const [ings, lots, pending, last] = await Promise.all([
+  const s = await getSettings();
+  const today = await businessToday();
+  const since = toDbDate(
+    new Date(Date.parse(`${today}T00:00:00Z`) - USAGE_DAYS * 86400_000).toISOString().slice(0, 10),
+  );
+  const [ings, lots, pending, last, used] = await Promise.all([
     prisma.ingredient.findMany({ where: { active: true }, orderBy: [{ category: 'asc' }, { name: 'asc' }] }),
     prisma.lot.findMany({ where: { branchId, qtyRemaining: { gt: 0 } } }),
     prisma.issueItem.groupBy({
@@ -344,6 +411,18 @@ export async function stock() {
       where: { branchId },
       orderBy: [{ date: 'desc' }, { id: 'desc' }],
       distinct: ['ingredientId'],
+    }),
+    // Recent use: everything that left the kitchen (not supplier returns), last USAGE_DAYS days before today.
+    prisma.issueItem.groupBy({
+      by: ['ingredientId'],
+      where: {
+        issue: {
+          branchId,
+          reason: { in: ['SALE_USE', 'INTERNAL_USE', 'DISPOSAL'] },
+          date: { gte: since, lt: toDbDate(today) },
+        },
+      },
+      _sum: { qty: true },
     }),
   ]);
   return ings.map((ing) => {
@@ -365,8 +444,45 @@ export async function stock() {
       pendingQty: p ? p.toString() : '0',
       value: value.toString(),
       lastPrice: lp ? lp.toString() : null,
+      ...reorderFields(
+        ing,
+        qty,
+        p?.toString() ?? '0',
+        used.find((u) => u.ingredientId === ing.id)?._sum.qty,
+        s,
+      ),
     };
   });
+}
+
+/** Recent pace and the reorder suggestion of one ingredient. */
+function reorderFields(
+  ing: { minStock: Prisma.Decimal | null; purchaseUnit: string | null; purchaseFactor: Prisma.Decimal },
+  onHand: Decimal,
+  pending: string,
+  usedQty: Prisma.Decimal | null | undefined,
+  s: { reorder_days: number },
+) {
+  const dailyUse = D(usedQty?.toString() ?? 0).div(USAGE_DAYS);
+  const factor = ing.purchaseUnit ? ing.purchaseFactor.toString() : '1';
+  const r = reorder({
+    onHand,
+    pending,
+    minStock: ing.minStock?.toString() ?? null,
+    dailyUse,
+    days: s.reorder_days,
+    purchaseFactor: factor,
+  });
+  return {
+    minStock: ing.minStock?.toString() ?? null,
+    dailyUse: dailyUse.toDecimalPlaces(3).toString(),
+    daysLeft: r.daysLeft,
+    status: r.status,
+    suggestQty: r.suggest.toString(),
+    suggestPurchaseQty: r.suggestPurchase.toString(),
+    purchaseUnit: ing.purchaseUnit,
+    purchaseFactor: factor,
+  };
 }
 
 export async function lots(ingredientId: number, openOnly: boolean) {

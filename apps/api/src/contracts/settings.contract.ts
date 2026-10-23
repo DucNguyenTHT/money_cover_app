@@ -32,6 +32,8 @@ export const settingsSchema = z.object({
   einvoice_registered: z.boolean(),
   /** Giờ (0–23) chạy sao lưu dữ liệu tự động mỗi ngày. */
   backup_hour: z.coerce.number().int().min(0).max(23),
+  /** Gợi ý nhập hàng đủ dùng cho bao nhiêu ngày. */
+  reorder_days: z.coerce.number().int().min(1).max(60),
   /** Đẩy mỗi bản sao lưu lên Google Drive đã kết nối. */
   backup_drive: z.boolean(),
   /** Gửi mỗi bản sao lưu vào cuộc trò chuyện Telegram đã chọn. */

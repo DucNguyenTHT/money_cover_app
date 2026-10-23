@@ -16,8 +16,9 @@ import { Field, Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok } from '@/lib/api-client';
-import { dateVi, money, parseQty, qty } from '@/lib/format';
-import { useBusinessToday } from '@/lib/business-date';
+import { dateVi, money, parseQty, qty, qtyUnit } from '@/lib/format';
+import { useBusinessDateState } from '@/lib/business-date';
+import { DateInput } from '@/components/DateInput';
 
 export const REASON: Record<IssueReason, { label: string; tone: BadgeTone; hint?: string }> = {
   SALE_USE: { label: 'Tiêu hao bán hàng', tone: 'primary' },
@@ -132,8 +133,9 @@ function IssueForm({
   const toast = useToast();
   const { data: ingredients } = useIngredients();
   const [reasonV, setReason] = useState<Manual>(defaultReason);
-  const bizToday = useBusinessToday();
-  const [date, setDate] = useState(defaultMonth === thisMonth() ? bizToday : `${defaultMonth}-01`);
+  const [date, setDate] = useBusinessDateState((t) =>
+    defaultMonth === thisMonth() ? t : `${defaultMonth}-01`,
+  );
   const [note, setNote] = useState('');
   const [lines, setLines] = useState<Line[]>([newLine()]);
   const setLine = (key: number, p: Partial<Line>) =>
@@ -197,7 +199,7 @@ function IssueForm({
             )}
           </Field>
           <Field label="Ngày">
-            {(id) => <Input id={id} type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
+            {(id) => <DateInput id={id} value={date} onChange={(v) => setDate(v)} />}
           </Field>
         </div>
         <div className="flex flex-col gap-2">
@@ -359,9 +361,7 @@ function IssueView({ id, onClose }: { id: number; onClose: () => void }) {
               {r.items.map((it) => (
                 <tr key={it.ingredientId} className="border-b border-line align-top">
                   <td className="px-3 py-2">{it.ingredientName}</td>
-                  <td className="px-3 py-2 text-right num">
-                    {qty(it.qty)} {it.unit}
-                  </td>
+                  <td className="px-3 py-2 text-right num">{qtyUnit(it.qty, it.unit)}</td>
                   <td className="px-3 py-2 text-[13px] text-muted">
                     {it.allocations.map((a) => (
                       <div key={a.lotId}>
@@ -369,9 +369,7 @@ function IssueView({ id, onClose }: { id: number; onClose: () => void }) {
                       </div>
                     ))}
                     {Number(it.pendingQty) > 0 && (
-                      <Badge tone="warn">
-                        Nợ kho {qty(it.pendingQty)} {it.unit}
-                      </Badge>
+                      <Badge tone="warn">Nợ kho {qtyUnit(it.pendingQty, it.unit)}</Badge>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right font-semibold num">{money(it.costTotal)}</td>

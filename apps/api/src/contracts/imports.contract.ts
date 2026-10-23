@@ -5,7 +5,7 @@ import { commonErrors, isoDate, type RouteMeta } from './common';
 const c = initContract();
 const admin = { roles: ['ADMIN'] } satisfies RouteMeta;
 
-export const IMPORT_KINDS = ['ingredients', 'dishes', 'recipes', 'opening'] as const;
+export const IMPORT_KINDS = ['ingredients', 'dishes', 'recipes', 'opening', 'options'] as const;
 export type ImportKind = (typeof IMPORT_KINDS)[number];
 
 export const importRequest = z.object({

@@ -20,6 +20,11 @@ export const ingredientInput = z.object({
   purchaseFactor: positive,
   category: z.string().trim().max(60).nullable(),
   active: z.boolean(),
+  /** Tồn tối thiểu (đơn vị kho); null = không theo dõi. */
+  minStock: decimalString
+    .refine((v) => Number(v) >= 0, 'Không được âm')
+    .nullable()
+    .default(null),
 });
 export const ingredientSchema = ingredientInput.extend({
   id: z.number(),

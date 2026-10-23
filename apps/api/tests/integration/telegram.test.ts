@@ -1,8 +1,9 @@
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../../src/core/db';
 import { documentsIdle } from '../../src/modules/backup/backup.service';
+import { storedPath } from '../../src/core/storage';
 import { clientFor, makeUser, resetDb, startServer, stopServer } from '../helpers/harness';
 
 const TOKEN = '123456789:AAHfake-token-for-tests-0123456789abcd';
@@ -15,9 +16,12 @@ beforeEach(async () => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-/** Fake Telegram Bot API: records what the bot sent. */
-function mockTelegram(opts: { tokenOk?: boolean; sendFails?: boolean; failFile?: string } = {}) {
+/** Fake Telegram Bot API: records what the bot sent and keeps the files (getFile / download). */
+function mockTelegram(
+  opts: { tokenOk?: boolean; sendFails?: boolean; failFile?: string; corruptFile?: string } = {},
+) {
   const realFetch = globalThis.fetch;
+  const files = new Map<string, Buffer>();
   const sent: {
     method: string;
     chatId: string;
@@ -33,7 +37,21 @@ function mockTelegram(opts: { tokenOk?: boolean; sendFails?: boolean; failFile?:
     if (!url.startsWith('https://api.telegram.org/')) return realFetch(input, init);
     if (!url.includes(`/bot${TOKEN}/`) || opts.tokenOk === false)
       return json({ ok: false, description: 'Unauthorized' }, 401);
+    if (url.includes('/file/bot')) {
+      const id = decodeURIComponent(url.split('/').pop()!);
+      const bytes = files.get(id);
+      if (!bytes) return new Response('not found', { status: 404 });
+      return new Response(id === `F-${opts.corruptFile}` ? Buffer.from('hỏng') : bytes);
+    }
     const method = url.split('/').pop()!;
+    if (method === 'getFile') {
+      const { file_id } = JSON.parse(String(init?.body)) as { file_id: string };
+      if (!files.has(file_id)) return json({ ok: false, description: 'Bad Request: invalid file_id' }, 400);
+      return json({
+        ok: true,
+        result: { file_id, file_path: `documents/${file_id}`, file_size: files.get(file_id)!.length },
+      });
+    }
     if (method === 'getMe')
       return json({ ok: true, result: { id: 1, username: 'quan_backup_bot', first_name: 'Sao lưu' } });
     if (method === 'getUpdates')
@@ -68,7 +86,8 @@ function mockTelegram(opts: { tokenOk?: boolean; sendFails?: boolean; failFile?:
         bytes: doc.size,
         caption: String(form.get('caption')),
       });
-      return json({ ok: true, result: { message_id: 2 } });
+      files.set(`F-${doc.name}`, Buffer.from(await doc.arrayBuffer()));
+      return json({ ok: true, result: { message_id: 2, document: { file_id: `F-${doc.name}` } } });
     }
     return json({ ok: false, description: 'unexpected ' + method }, 400);
   });
@@ -252,6 +271,33 @@ describe('invoice files to Telegram', () => {
         .filter((x) => x.chatId === '-1001234')
         .map((x) => x.fileName),
     ).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+  });
+
+  it('files lost on disk come back from Telegram, checked against the original', async () => {
+    const { client } = await makeUser({ username: 'chu', role: 'ADMIN' });
+    mockTelegram({ corruptFile: 'b.jpg' });
+    await client.telegram.saveToken({ body: { botToken: TOKEN } });
+    await client.telegram.setChat({ body: { chatId: '555', title: 'Chủ Quán' } });
+    await fileDocument(client, 'A', 'a.jpg');
+    await fileDocument(client, 'B', 'b.jpg');
+    await client.backups.run({ body: {} });
+    await documentsIdle();
+    await fileDocument(client, 'C', 'c.jpg'); // never sent
+
+    // The server's disk is replaced: the database is back, the files are not.
+    const rows = await prisma.documentFile.findMany({ orderBy: { id: 'asc' } });
+    for (const f of rows) rmSync(storedPath(f.path), { force: true });
+    expect((await client.telegram.restoreStatus()).body).toEqual({ missing: 3, restorable: 2 });
+
+    const r = (await client.telegram.restore({ body: {} })).body as {
+      restored: number;
+      failed: { name: string; message: string }[];
+      remaining: number;
+    };
+    expect(r).toMatchObject({ restored: 1, remaining: 1, failed: [{ name: 'b.jpg' }] });
+    expect(r.failed[0]!.message).toContain('không khớp');
+    expect(readFileSync(storedPath(rows[0]!.path)).equals(Buffer.from(jpeg('a.jpg'), 'base64'))).toBe(true);
+    expect((await client.telegram.restoreStatus()).body).toEqual({ missing: 2, restorable: 1 });
   });
 
   it('turned off: no invoice files are sent', async () => {

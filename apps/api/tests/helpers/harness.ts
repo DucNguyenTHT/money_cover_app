@@ -12,11 +12,24 @@ import { DEFAULT_SETTINGS } from '../../src/modules/settings/defaults';
 let server: Server | null = null;
 let baseUrl = '';
 
+/** Ports fetch refuses ("bad ports"); Windows may hand them out as random ports (dynamic range from 1024). */
+const FETCH_BAD_PORTS = new Set([
+  1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697,
+  10080,
+]);
+
 export async function startServer() {
   if (server) return;
-  server = createApp().listen(0);
-  await new Promise((r) => server!.once('listening', r));
-  baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  for (;;) {
+    server = createApp().listen(0);
+    await new Promise((r) => server!.once('listening', r));
+    const port = (server.address() as AddressInfo).port;
+    if (!FETCH_BAD_PORTS.has(port)) {
+      baseUrl = `http://127.0.0.1:${port}`;
+      return;
+    }
+    await new Promise((r) => server!.close(r));
+  }
 }
 
 export async function stopServer() {

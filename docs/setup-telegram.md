@@ -41,8 +41,10 @@ hoa-don.jpg
 Mở cuộc trò chuyện → tải file `ketoan-YYYYMMDD-HHmm.dump` mới nhất về thư mục `backups\` trên máy chủ → chạy
 lệnh khôi phục ở `setup-store.md` (mục Khôi phục).
 
-Ảnh chứng từ: tải các file trong cuộc trò chuyện về nếu cần đối chiếu. Database đã lưu thông tin chứng từ
-(ngày, đối tác, số tiền…); file ảnh khôi phục từ `backups\documents\` / `BACKUP_COPY_DIR` nếu có.
+Ảnh chứng từ: sau khi khôi phục database, mở _Hệ thống → Cài đặt → Telegram_. Nếu máy chủ thiếu file ảnh, mục
+**Khôi phục ảnh chứng từ** hiện số file thiếu → bấm **Lấy lại … file từ Telegram**: máy chủ tự tải lại các file đã
+gửi (mỗi file ≤ 20 MB, kiểm tra khớp bản gốc) và gắn lại vào chứng từ. Cần nhập **cùng mã bot** đã gửi file. File
+gửi trước khi có tính năng này, hoặc chưa từng gửi, thì lấy từ `backups\documents\` / `BACKUP_COPY_DIR`.
 
 ## Lưu ý
 

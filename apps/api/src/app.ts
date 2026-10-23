@@ -26,6 +26,9 @@ import { documentExport, documentFiles, documentsRouter } from './modules/docume
 import { driveRouter } from './modules/drive/drive.router';
 import { backupsRouter } from './modules/backup/backup.router';
 import { telegramRouter } from './modules/telegram/telegram.router';
+import { cashRouter } from './modules/cash/cash.router';
+import { suppliersRouter } from './modules/suppliers/suppliers.router';
+import { staffRouter } from './modules/staff/staff.router';
 import { architecturePage } from './modules/architecture/architecture.page';
 
 export function createApp() {
@@ -88,6 +91,9 @@ export function createApp() {
     drive: driveRouter,
     backups: backupsRouter,
     telegram: telegramRouter,
+    cash: cashRouter,
+    suppliers: suppliersRouter,
+    staff: staffRouter,
   });
   createExpressEndpoints(api, router, app, {
     globalMiddleware: [authMiddleware],

@@ -260,13 +260,18 @@ export const dashboardSchema = z.object({
   }),
   alerts: z.object({
     pendingIngredients: z.number(),
+    /** Dishes losing money / over their food-cost target. */
     priceAlerts: z.number(),
     lossDishes: z.number(),
+    /** Options (sizes per dish, add-ons once) losing money / over target. */
+    optionAlerts: z.number(),
     cancelledToday: z.number(),
     belowCostToday: z.number(),
     unclosedDays: z.number(),
     /** Orders still open from an earlier business day (that day cannot be closed). */
     staleOpenOrders: z.number(),
+    /** Ingredients out of stock or running low (Cần nhập hàng). */
+    lowStock: z.number(),
     /** Database backup needs attention (see backups.contract). */
     backup: z.enum(['NEVER', 'FAILED', 'STALE', 'DRIVE_FAILED', 'TELEGRAM_FAILED']).nullable(),
     lockedPins: z.number(),

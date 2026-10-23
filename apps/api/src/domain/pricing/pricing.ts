@@ -201,3 +201,66 @@ export function priceAlert(c: ChannelCost, targetPct: Num, tolerancePct: Num): P
   if (c.foodCostPct.gt(D(targetPct).add(tolerancePct))) return 'OVER_TARGET';
   return null;
 }
+
+export interface OptionPricingInput {
+  /** Added to the dish price. */
+  optionPrice: Num;
+  /** Multiplies the dish recipe (size); 1 = an add-on. */
+  recipeFactor: Num;
+  /** Extra ingredients per portion: stock units, latest price per stock unit (null = never bought). */
+  extras: readonly { qty: Num; unitPrice: Num | null }[];
+  /** The dish in the store: direct cost of one portion, and its price (null = none yet). */
+  dishCost: Num;
+  dishPrice: Num | null;
+  overheadPct: Num;
+  targetPct: Num;
+  tolerancePct: Num;
+  step: Num;
+}
+
+export interface OptionPricing {
+  kind: 'SIZE' | 'ADDON';
+  /** What the option adds to the cost of the portion. */
+  extraCost: Decimal;
+  /** Judged as sold: the add-on alone, or the whole portion in that size (null when the dish has no price). */
+  price: Decimal | null;
+  cost: Decimal;
+  profit: Decimal | null;
+  foodCostPct: Decimal | null;
+  /** Option price keeping the target food cost % on what it adds (null when it adds no cost). */
+  suggested: Decimal | null;
+  alert: PriceAlertLevel;
+}
+
+/**
+ * Profit of a dish option at the latest purchase prices. An add-on (extra egg, extra meat) is judged on its own price
+ * against its extra ingredients; a size (recipe × factor) on the whole portion in that size. Free options and
+ * discounts (price ≤ 0) are never an alert.
+ */
+export function optionPricing(i: OptionPricingInput): OptionPricing {
+  const extras = i.extras.reduce((s, e) => s.add(D(e.qty).mul(e.unitPrice ?? 0)), ZERO);
+  const factor = D(i.recipeFactor);
+  const size = !factor.eq(1);
+  const extraCost = roundVnd(extras.add(factor.sub(1).mul(i.dishCost)));
+  const price = size ? (i.dishPrice === null ? null : D(i.dishPrice).add(i.optionPrice)) : D(i.optionPrice);
+  const cost = size ? roundVnd(D(i.dishCost).mul(factor).add(extras)) : extraCost;
+  const sold = price !== null && price.gt(0);
+  const foodCostPct = sold ? pct(cost, price) : null;
+  const alert: PriceAlertLevel = !sold
+    ? null
+    : cost.gte(price)
+      ? 'LOSS'
+      : foodCostPct!.gt(D(i.targetPct).add(i.tolerancePct))
+        ? 'OVER_TARGET'
+        : null;
+  return {
+    kind: size ? 'SIZE' : 'ADDON',
+    extraCost,
+    price,
+    cost,
+    profit: price === null ? null : price.sub(cost).sub(roundVnd(price.mul(i.overheadPct).div(100))),
+    foodCostPct,
+    suggested: extraCost.gt(0) ? suggestStorePrice(extraCost, i.targetPct, i.step) : null,
+    alert,
+  };
+}

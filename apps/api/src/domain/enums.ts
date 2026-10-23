@@ -59,6 +59,19 @@ export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 export const TAX_GROUPS = values('DISTRIBUTION', 'SERVICE', 'PRODUCTION', 'OTHER');
 export type TaxGroup = (typeof TAX_GROUPS)[number];
 
+export const CASH_DIRECTIONS = values('IN', 'OUT');
+export type CashDirection = (typeof CASH_DIRECTIONS)[number];
+
+export const PAY_TYPES = values('HOURLY', 'MONTHLY');
+export type PayType = (typeof PAY_TYPES)[number];
+
+export const PAYROLL_STATUSES = values('DRAFT', 'CLOSED');
+export type PayrollStatus = (typeof PAYROLL_STATUSES)[number];
+
+/** How a supplier was paid; OPENING = settled before payables were tracked. */
+export const SUPPLIER_PAY_METHODS = values('CASH', 'TRANSFER', 'OPENING');
+export type SupplierPayMethod = (typeof SUPPLIER_PAY_METHODS)[number];
+
 export const TAX_REGIMES = values('HOUSEHOLD', 'DEDUCTION');
 export type TaxRegime = (typeof TAX_REGIMES)[number];
 

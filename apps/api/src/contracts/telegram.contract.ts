@@ -18,6 +18,14 @@ export type TelegramStatus = z.infer<typeof telegramStatus>;
 export const telegramChat = z.object({ id: z.string(), title: z.string(), type: z.string() });
 export type TelegramChat = z.infer<typeof telegramChat>;
 
+export const restoreStatus = z.object({
+  /** Invoice files (Chứng từ) whose bytes are missing on the server. */
+  missing: z.number(),
+  /** Of those, the ones sent to Telegram earlier: they can be downloaded again. */
+  restorable: z.number(),
+});
+export type RestoreStatus = z.infer<typeof restoreStatus>;
+
 export const telegramContract = c.router(
   {
     status: {
@@ -61,6 +69,29 @@ export const telegramContract = c.router(
       body: z.object({}),
       metadata: admin,
       responses: { 200: telegramStatus, ...commonErrors },
+    },
+    restoreStatus: {
+      method: 'GET',
+      path: '/api/telegram/restore',
+      metadata: admin,
+      responses: { 200: restoreStatus, ...commonErrors },
+      summary: 'Số file ảnh chứng từ đang thiếu trên máy chủ, và số file lấy lại được từ Telegram',
+    },
+    restore: {
+      method: 'POST',
+      path: '/api/telegram/restore',
+      body: z.object({}),
+      metadata: admin,
+      responses: {
+        200: z.object({
+          restored: z.number(),
+          failed: z.array(z.object({ name: z.string(), message: z.string() })),
+          /** Still missing and restorable after this batch (call again while it goes down). */
+          remaining: z.number(),
+        }),
+        ...commonErrors,
+      },
+      summary: 'Tải lại từ Telegram một lượt file ảnh chứng từ bị mất (kiểm tra khớp bản gốc)',
     },
   },
   { strictStatusCodes: true },

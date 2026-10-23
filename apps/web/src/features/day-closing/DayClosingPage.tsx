@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { AlertTriangle, CheckCircle2, Lock } from 'lucide-react';
 import type { DayClosingDto } from '@ketoan/api/contracts';
 import { businessDateOf } from '@ketoan/api/domain';
@@ -14,6 +15,7 @@ import { client, errorMessage, ok } from '@/lib/api-client';
 import { dateVi, money } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { posKeys, usePosSettings } from '@/pos/data';
+import { DateInput } from '@/components/DateInput';
 
 const METHOD = { CASH: 'Tiền mặt', TRANSFER: 'Chuyển khoản', CARD: 'Thẻ', APP: 'App giao hàng' } as const;
 
@@ -78,11 +80,10 @@ export function DayClosingPage({ inPos = false }: { inPos?: boolean }) {
         title="Chốt ngày"
         subtitle="Đếm tiền mặt cuối ngày và đối chiếu với số máy tính"
         actions={
-          <Input
-            type="date"
+          <DateInput
             aria-label="Ngày kinh doanh"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(v) => setDate(v)}
             className="w-44"
           />
         }
@@ -97,7 +98,7 @@ export function DayClosingPage({ inPos = false }: { inPos?: boolean }) {
           )}
           {p?.closing?.needsReclose && (
             <p className="flex items-center gap-2 rounded-ctl bg-warn-soft px-3 py-2 text-[13px] text-warn">
-              <AlertTriangle size={16} /> Có đơn bị huỷ sau khi chốt — cần chốt lại.
+              <AlertTriangle size={16} /> Có thay đổi sau khi chốt (huỷ đơn, sổ quỹ) — cần chốt lại.
             </p>
           )}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -136,10 +137,30 @@ export function DayClosingPage({ inPos = false }: { inPos?: boolean }) {
               </Badge>
             )}
           </h2>
-          <div className="flex justify-between text-[13px] text-muted">
-            <span>Tiền mặt dự kiến (thu − thối)</span>
-            <span className="num font-semibold text-ink">{p ? money(p.expectedCash) : '—'}</span>
-          </div>
+          <dl className="flex flex-col gap-1 text-[13px] text-muted">
+            <div className="flex justify-between">
+              <dt>Tiền mặt bán hàng (thu − thối)</dt>
+              <dd className="num">{p ? money(p.cashSales) : '—'}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>+ Thu vào két (sổ quỹ)</dt>
+              <dd className="num">{p ? money(p.cashIn) : '—'}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>− Chi từ két (sổ quỹ)</dt>
+              <dd className="num">{p ? money(p.cashOut) : '—'}</dd>
+            </div>
+            <div className="flex justify-between border-t border-line pt-1">
+              <dt className="font-medium text-ink">Tiền mặt dự kiến</dt>
+              <dd className="num font-semibold text-ink">{p ? money(p.expectedCash) : '—'}</dd>
+            </div>
+          </dl>
+          <Link
+            to={inPos ? '/pos/cash' : '/admin/accounting/cash'}
+            className="-mt-1 self-end text-[13px] text-primary-ink hover:underline"
+          >
+            Mở sổ quỹ
+          </Link>
           <label className="flex flex-col gap-1.5 text-[13px] font-medium">
             Tiền mặt đếm được
             <Input

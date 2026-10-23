@@ -4,12 +4,12 @@ import { ChevronDown, Download } from 'lucide-react';
 import type { MonthStatus } from '@ketoan/api/domain';
 import { Button } from './ui/Button';
 import { Badge, Card } from './ui/controls';
-import { Input } from './ui/Input';
 import { useToast } from './ui/Toast';
 import { money } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { exportCsv, exportXlsx, type ExportSheet } from '@/lib/export';
 import { today } from './MonthPicker';
+import { DateInput } from '@/components/DateInput';
 
 export const STATUS_META: Record<
   MonthStatus,
@@ -85,21 +85,19 @@ export function RangePicker({ value, onChange }: { value: Range; onChange: (r: R
   ];
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Input
-        type="date"
+      <DateInput
         aria-label="Từ ngày"
         value={value.from}
         max={value.to}
-        onChange={(e) => onChange({ ...value, from: e.target.value })}
+        onChange={(v) => onChange({ ...value, from: v })}
         className="h-9 w-40"
       />
       <span className="text-muted">–</span>
-      <Input
-        type="date"
+      <DateInput
         aria-label="Đến ngày"
         value={value.to}
         min={value.from}
-        onChange={(e) => onChange({ ...value, to: e.target.value })}
+        onChange={(v) => onChange({ ...value, to: v })}
         className="h-9 w-40"
       />
       <div className="flex flex-wrap gap-1">

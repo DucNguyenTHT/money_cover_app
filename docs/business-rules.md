@@ -39,12 +39,52 @@ Các công thức nằm trong `apps/api/src/domain` (có unit test). Tài liệu
 - **FIFO theo lô**: mỗi dòng phiếu nhập là một lô với giá nhập riêng; xuất lấy lô cũ nhất trước. Lô bị khoá hàng (`SELECT … FOR UPDATE`) theo thứ tự để không trùng khi 2 máy thanh toán cùng lúc.
 - **Nợ kho**: bán khi chưa nhập hàng → dòng xuất có `pending_qty`, tạm tính theo giá nhập gần nhất. Phiếu nhập sau đó **tất toán** nợ kho (cũ trước), giá vốn của đơn liên quan được tính lại.
 - Phiếu nhập chỉ sửa / xoá được khi lô chưa bị dùng.
+- **Cần nhập hàng:** lượng dùng / ngày = (xuất bán + dùng nội bộ + xuất huỷ) của 14 ngày trước hôm nay ÷ 14.
+  Tồn dùng được = tồn − nợ kho. _Hết hàng_ khi tồn dùng được ≤ 0 (và có dùng gần đây hoặc có tồn tối thiểu);
+  _Sắp hết_ khi dưới tồn tối thiểu hoặc không đủ dùng `reorder_days` ngày (mặc định 3). Gợi ý nhập = đủ
+  max(tồn tối thiểu, lượng dùng × số ngày), làm tròn lên theo đơn vị mua (thùng, bao…).
+
+## Sổ quỹ tiền mặt
+
+- Ghi tiền bỏ vào / lấy ra khỏi két **ngoài bán hàng**: tiền lẻ đầu ngày, chi chợ, nộp ngân hàng… Không ghi cho ngày
+  tương lai, không ghi vào tháng đã khoá sổ.
+- **Chốt ngày:** tiền mặt dự kiến = tiền mặt bán hàng (thu − thối) + thu sổ quỹ − chi sổ quỹ của ngày đó. Thêm / huỷ
+  khoản của một ngày đã chốt → ngày đó "Cần chốt lại".
+- Không xoá, chỉ **huỷ có lý do** (vẫn hiện, gạch ngang): người ghi được huỷ trong ngày, ADMIN huỷ bất cứ lúc nào.
+- Khoản do màn hình khác tự ghi (trả nhà cung cấp, trả lương, tạm ứng bằng tiền mặt) chỉ huỷ ở màn hình đó.
+
+## Nhà cung cấp & công nợ
+
+- Phiếu nhập hàng gắn một nhà cung cấp theo tên (không phân biệt hoa thường; chưa có thì tự tạo). Phiếu trả ngay
+  mà không ghi tên → nhà cung cấp "Mua lẻ".
+- **Công nợ** = tổng các phiếu nhập − tổng đã trả (không tính lần trả đã huỷ). Âm = trả trước.
+- Tạo phiếu: _Mua chịu_ (ghi nợ), _Tiền mặt từ két_ hoặc _Chuyển khoản / khác_; trả đủ hoặc một phần (không quá tổng
+  phiếu). Trả tiền mặt → tự ghi chi "Trả nhà cung cấp" vào sổ quỹ.
+- Mỗi phiếu "còn nợ" bao nhiêu: lần trả gắn với phiếu trả cho phiếu đó trước, còn lại trả các phiếu **cũ nhất trước**.
+- Sửa phiếu: các lần trả đi theo phiếu (cả khi đổi nhà cung cấp). Xoá phiếu: các lần trả của phiếu bị huỷ (kèm khoản
+  chi trong sổ quỹ). Không đổi phiếu đã trả tiền thành tồn đầu.
+- Phiếu nhập có trước khi dùng công nợ được coi là đã trả (một dòng "Đã thanh toán trước khi dùng công nợ" mỗi nhà
+  cung cấp, không huỷ được).
+
+## Nhân viên, chấm công, bảng lương
+
+- Nhân viên trả **theo giờ** (giờ công × lương giờ) hoặc **theo tháng** (lương cố định). Gắn tài khoản đăng nhập thì
+  tự bấm _Vào ca / Ra ca_ trên máy bán hàng hoặc màn bếp.
+- **Chấm công:** mỗi người mỗi ngày một dòng: ca được xếp và giờ vào / ra. Giờ công = giờ ra − giờ vào; giờ trước
+  giờ bắt đầu ngày kinh doanh (hoặc giờ ra trước giờ vào) là sáng hôm sau (ca qua đêm). "Điền đủ ca" lấy giờ của ca
+  cho các ngày đã xếp ca mà chưa chấm.
+- **Bảng lương tháng:** lương = (giờ công × lương giờ, hoặc lương tháng) + thưởng − trừ; **còn trả** = lương − tạm
+  ứng trong tháng. Tạm ứng tiền mặt tự ghi chi "Tạm ứng lương" vào sổ quỹ.
+- **Chốt bảng lương:** giữ nguyên số liệu, ghi tổng lương vào **chi phí chung** tháng đó (khoản "Lương", ghi chú
+  "Theo bảng lương tháng …"); nếu tháng đã có khoản "Lương" nhập tay thì nhắc để không tính hai lần. Đã chốt thì
+  chấm công và tạm ứng của tháng không sửa được; mở lại (có lý do) gỡ khoản chi phí chung, chỉ khi chưa trả ai.
+- **Trả lương** từng người sau khi chốt: tiền mặt → tự ghi chi "Trả lương" vào sổ quỹ. Huỷ trả (ADMIN, có lý do).
 
 ## Kiểm kê
 
 - Tồn sổ sách tại ngày kiểm = Σ nhập (≤ ngày) − Σ xuất (≤ ngày, gồm nợ kho) − Σ thiếu của các lần kiểm trước.
 - Chốt: **thiếu** → trừ lô FIFO; **thừa** → tạo lô mới giá nhập gần nhất (bù nợ kho trước).
-- Giá trị thiếu / thừa **phân bổ vào món** theo lượng nguyên liệu mỗi món đã dùng từ lần kiểm kê trước (hoặc từ tồn đầu). Không món nào dùng → "hao hụt chung".
+- Giá trị thiếu / thừa **phân bổ vào món** theo lượng nguyên liệu mỗi món đã dùng từ sau ngày kiểm kê trước (hoặc từ ngày nhập tồn đầu, tính cả ngày đó). Không món nào dùng → "hao hụt chung".
 
 ## Giá thành & giá bán
 
@@ -55,6 +95,14 @@ Các công thức nằm trong `apps/api/src/domain` (có unit test). Tài liệu
 | Giá gợi ý tại quán   | giá vốn ÷ % food cost mục tiêu, làm tròn lên                                                                                          |
 | Giá gợi ý app        | **mỗi app một giá**: giữ nguyên lãi ròng / phần như tại quán sau chiết khấu của app đó                                                |
 | Cảnh báo             | giá vốn + chiết khấu ≥ giá bán (tại quán hoặc **bất kỳ app nào**) → "Đang lỗ"; % nguyên liệu vượt mục tiêu + ngưỡng → "Vượt mục tiêu" |
+
+**Tuỳ chọn / topping.** Bảng tính giá và Cảnh báo giá tính lãi từng tuỳ chọn của món (tại quán):
+
+- _Topping_ (hệ số định mức 1): giá cộng thêm so với nguyên liệu thêm → "Đang lỗ" khi nguyên liệu thêm ≥ giá cộng
+  thêm, "Vượt mục tiêu" khi % nguyên liệu vượt mục tiêu + ngưỡng. Topping dùng chung nhiều món chỉ báo một lần.
+- _Size_ (hệ số ≠ 1): xét **cả phần** cỡ đó: (giá món + cộng thêm) so với (giá vốn món × hệ số + nguyên liệu thêm).
+- Tuỳ chọn miễn phí hoặc giảm giá (≤ 0 đ) không cảnh báo. Gợi ý giá cộng thêm = phần giá vốn tăng thêm ÷ % mục
+  tiêu, làm tròn lên.
 
 **Giá bán theo app.** Món có giá tại quán, một **giá app chung** và có thể có **giá riêng cho từng app**
 (Grab, Shopee…). Đơn app lấy giá riêng của app → nếu không có thì giá app chung → nếu không có thì giá tại quán.
@@ -104,14 +152,19 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 
 ## Quyền
 
-|                                                              | ADMIN | STAFF                      | KITCHEN       |
-| ------------------------------------------------------------ | ----- | -------------------------- | ------------- |
-| Bán hàng, chốt ngày                                          | ✓     | ✓                          |               |
-| Màn hình bếp / bar                                           | ✓     | ✓                          | trạm của mình |
-| Phiếu nhập / xuất, kiểm kê nháp                              | ✓     | ✓                          |               |
-| Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ | ✓     |                            |               |
-| Sao lưu dữ liệu, Google Drive, Telegram                      | ✓     |                            |               |
-| Thấy giá vốn / lãi                                           | ✓     | (API tự bỏ các trường này) |               |
+|                                                              | ADMIN | STAFF                           | KITCHEN       |
+| ------------------------------------------------------------ | ----- | ------------------------------- | ------------- |
+| Bán hàng, chốt ngày                                          | ✓     | ✓                               |               |
+| Màn hình bếp / bar                                           | ✓     | ✓                               | trạm của mình |
+| Phiếu nhập / xuất, kiểm kê nháp                              | ✓     | ✓                               |               |
+| Sổ quỹ: ghi khoản thu chi                                    | ✓     | ✓ (huỷ: khoản mình, trong ngày) |               |
+| Nhà cung cấp: xem công nợ, trả tiền                          | ✓     | ✓                               |               |
+| Nhà cung cấp: thêm / sửa, huỷ lần trả                        | ✓     |                                 |               |
+| Nhân viên, chấm công, bảng lương, tạm ứng                    | ✓     |                                 |               |
+| Tự vào ca / ra ca (tài khoản gắn với nhân viên)              | ✓     | ✓                               | ✓             |
+| Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ | ✓     |                                 |               |
+| Sao lưu dữ liệu, Google Drive, Telegram                      | ✓     |                                 |               |
+| Thấy giá vốn / lãi                                           | ✓     | (API tự bỏ các trường này)      |               |
 
 ## Sao lưu dữ liệu
 
@@ -125,6 +178,10 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 - "Gửi cả ảnh / file chứng từ": sau mỗi lần sao lưu, gửi các file chứng từ chưa gửi theo thứ tự tải lên, mỗi file
   một lần (nhớ vị trí đã gửi), tối đa 100 file / lần, cách nhau ~3 giây; lỗi thì dừng, lần sau gửi tiếp. Đổi
   cuộc trò chuyện → gửi lại từ đầu.
+- **Khôi phục ảnh chứng từ:** mỗi file đã gửi lưu lại mã file Telegram (`telegram_file_id`, nằm trong bản sao lưu
+  database). Máy chủ thiếu file (thay máy, khôi phục dữ liệu) → Cài đặt › Telegram báo số file thiếu; bấm "Lấy lại"
+  để tải về (bot tải được file ≤ 20 MB), mỗi file phải **khớp sha256** đã ghi lúc tải lên. Ảnh thu nhỏ không gửi
+  lên Telegram nên được bỏ (hiện ảnh gốc). File gửi trước khi có tính năng này không có mã → không lấy lại được.
 - Cảnh báo khi: chưa có bản nào, lần gần nhất lỗi, bản thành công gần nhất cũ hơn 2 ngày, hoặc chưa gửi được lên
   Drive / qua Telegram.
 - Google Client ID / secret nhập trong Cài đặt (secret mã hoá, không gửi ra trình duyệt); đổi Client ID thì kết

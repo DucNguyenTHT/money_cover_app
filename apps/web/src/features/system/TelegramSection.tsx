@@ -194,8 +194,72 @@ export function TelegramSection() {
               )}
             </div>
           )}
+          {s.botUsername && !editing && <RestoreDocuments />}
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Invoice files lost on the server (disk replaced, database restored from a backup) are downloaded again from the
+ * Telegram chat they were sent to, a batch at a time.
+ */
+function RestoreDocuments() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [progress, setProgress] = useState<string | null>(null);
+  const check = useQuery({
+    queryKey: ['telegram', 'restore'],
+    queryFn: async () => ok(await client.telegram.restoreStatus()),
+    staleTime: 60_000,
+  });
+  const restore = useMutation({
+    mutationFn: async () => {
+      let restored = 0;
+      const failed = new Map<string, string>();
+      for (;;) {
+        const r = ok(await client.telegram.restore({ body: {} }));
+        restored += r.restored;
+        r.failed.forEach((f) => failed.set(f.name, f.message));
+        setProgress(`Đã lấy lại ${restored} file…`);
+        if (r.remaining === 0 || r.restored === 0) break;
+      }
+      return { restored, failed: [...failed] };
+    },
+    onSettled: () => {
+      setProgress(null);
+      qc.invalidateQueries({ queryKey: ['telegram', 'restore'] });
+      qc.invalidateQueries({ queryKey: ['documents'] });
+    },
+    onSuccess: ({ restored, failed }) =>
+      failed.length
+        ? toast(
+            `Đã lấy lại ${restored} file; ${failed.length} file lỗi: ${failed[0]![0]} — ${failed[0]![1]}`,
+            'bad',
+          )
+        : toast(`Đã lấy lại ${restored} file ảnh chứng từ từ Telegram`),
+    onError: (e) => toast(errorMessage(e), 'bad'),
+  });
+  const c = check.data;
+  if (!c || c.missing === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-card border border-warn/40 bg-warn-soft p-4 text-[13px]">
+      <b className="text-warn">Khôi phục ảnh chứng từ</b>
+      <p className="text-ink">
+        Máy chủ đang thiếu file của <b>{c.missing}</b> ảnh chứng từ (thường gặp sau khi thay máy / khôi phục
+        dữ liệu). {c.restorable > 0 ? `${c.restorable} file đã gửi lên Telegram có thể lấy lại.` : ''}
+        {c.missing > c.restorable &&
+          ` ${c.missing - c.restorable} file chưa từng gửi lên Telegram (hoặc gửi trước khi có tính năng này) — tìm trong bản sao file của máy cũ.`}
+      </p>
+      {c.restorable > 0 && (
+        <div className="flex items-center gap-3">
+          <Button variant="primary" loading={restore.isPending} onClick={() => restore.mutate()}>
+            Lấy lại {c.restorable} file từ Telegram
+          </Button>
+          {progress && <span className="text-muted">{progress}</span>}
+        </div>
+      )}
+    </div>
   );
 }

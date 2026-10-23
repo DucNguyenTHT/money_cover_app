@@ -476,6 +476,12 @@ export const dayPreviewSchema = z.object({
   vatAmount: decimalString,
   total: decimalString,
   byMethod,
+  /** Cash taken from sales. */
+  cashSales: decimalString,
+  /** Cash book of the day (sổ quỹ): money put in / taken out of the till. */
+  cashIn: decimalString,
+  cashOut: decimalString,
+  /** cashSales + cashIn − cashOut. */
   expectedCash: decimalString,
   closing: dayClosingSchema.nullable(),
 });

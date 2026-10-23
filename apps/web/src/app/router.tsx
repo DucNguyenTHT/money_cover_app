@@ -56,6 +56,14 @@ const adminScreens: Record<string, Pick<RouteObject, 'lazy'> & { staff?: boolean
     () => import('@/features/catalog/DishPriceHistoryPage'),
     'DishPriceHistoryPage',
   ),
+  'inventory/reorder': {
+    ...lazyComponent(() => import('@/features/inventory/ReorderPage'), 'ReorderPage'),
+    staff: true,
+  },
+  'inventory/suppliers': {
+    ...lazyComponent(() => import('@/features/inventory/SuppliersPage'), 'SuppliersPage'),
+    staff: true,
+  },
   'inventory/receipts': {
     ...lazyComponent(() => import('@/features/inventory/ReceiptsPage'), 'ReceiptsPage'),
     staff: true,
@@ -79,7 +87,11 @@ const adminScreens: Record<string, Pick<RouteObject, 'lazy'> & { staff?: boolean
     'DayClosingPage',
   ),
   'accounting/overheads': lazyComponent(() => import('@/features/accounting/OverheadsPage'), 'OverheadsPage'),
+  'accounting/cash': lazyComponent(() => import('@/features/cash/CashBookPage'), 'CashBookPage'),
   'accounting/periods': lazyComponent(() => import('@/features/accounting/PeriodsPage'), 'PeriodsPage'),
+  'staff/attendance': lazyComponent(() => import('@/features/staff/AttendancePage'), 'AttendancePage'),
+  'staff/payroll': lazyComponent(() => import('@/features/staff/PayrollPage'), 'PayrollPage'),
+  'staff/employees': lazyComponent(() => import('@/features/staff/EmployeesPage'), 'EmployeesPage'),
   'reports/pnl': lazyComponent(reports, 'PnlMonthPage'),
   'reports/pnl-range': lazyComponent(reports, 'PnlRangePage'),
   'reports/tax': lazyComponent(() => import('@/features/reports/TaxReportPage'), 'TaxReportPage'),
@@ -145,6 +157,10 @@ export const router = createBrowserRouter([
           {
             path: 'orders',
             ...lazyComponent(() => import('@/features/order-history/OrderListPage'), 'PosOrderListPage'),
+          },
+          {
+            path: 'cash',
+            ...lazyComponent(() => import('@/features/cash/CashBookPage'), 'PosCashBookPage'),
           },
           {
             path: 'day-closing',

@@ -103,6 +103,80 @@ describe('Excel import', () => {
     expect(await prisma.lot.count()).toBe(2);
   });
 
+  it('imports option groups: size with recipe factors, toppings with extra ingredients, attached to dishes', async () => {
+    const { client } = await makeUser({ username: 'quanly', role: 'ADMIN' });
+    await prisma.ingredient.create({
+      data: { code: 'TRUNG', name: 'Trứng', unit: 'quả', recipeUnit: 'quả' },
+    });
+    await prisma.ingredient.create({
+      data: { code: 'BO', name: 'Thịt bò', unit: 'kg', recipeUnit: 'g', recipeFactor: 1000 },
+    });
+    const cat = await prisma.dishCategory.create({ data: { name: 'Món nước', station: 'KITCHEN' } });
+    const pho = await prisma.dish.create({ data: { code: 'PHO', name: 'Phở', categoryId: cat.id } });
+
+    const bad = await xlsx('options', [
+      ['Size', 'Chọn 1', '', 2, 'Nhỏ', '', 0.8, 'Có', '', '', ''],
+      ['Size', '', '', '', 'Vừa', '', '', 'Có', '', '', 'KHONGCO'],
+    ]);
+    const prev = (await client.imports.preview({ params: { kind: 'options' }, body: { fileBase64: bad } }))
+      .body as {
+      rows: { errors: string[] }[];
+    };
+    expect(prev.rows.flatMap((r) => r.errors)).toEqual(
+      expect.arrayContaining([
+        'Không có món mã "KHONGCO"',
+        'Nhóm chọn 1 không có "Chọn tối đa"',
+        'Nhóm chọn 1 chỉ được có 1 tuỳ chọn chọn sẵn',
+      ]),
+    );
+
+    const file = await xlsx('options', [
+      ['Size', 'Chọn 1', 'Có', '', 'Nhỏ', -5000, 0.8, '', '', '', 'PHO'],
+      ['Size', '', '', '', 'Vừa', 0, 1, 'Có', '', '', ''],
+      ['Size', '', '', '', 'Lớn', 10000, 1.5, '', '', '', ''],
+      ['Topping', 'Chọn nhiều', '', 3, 'Thêm trứng', 5000, '', '', 'TRUNG', 1, 'PHO'],
+      ['Topping', '', '', '', 'Thêm bò', 15000, '', '', 'BO', 50, ''],
+      ['Topping', '', '', '', 'Thêm bò', 15000, '', '', 'TRUNG', 1, ''],
+    ]);
+    expect(
+      (await client.imports.commit({ params: { kind: 'options' }, body: { fileBase64: file } })).body,
+    ).toEqual({ created: 6, updated: 0 });
+    const groups = await prisma.optionGroup.findMany({
+      include: {
+        options: { include: { ingredients: { include: { ingredient: true } } }, orderBy: { sort: 'asc' } },
+      },
+      orderBy: { id: 'asc' },
+    });
+    expect(groups.map((g) => [g.name, g.multi, g.required, g.maxSelect])).toEqual([
+      ['Size', false, true, null],
+      ['Topping', true, false, 3],
+    ]);
+    expect(
+      groups[0]!.options.map((o) => [o.name, o.price.toString(), o.recipeFactor.toString(), o.isDefault]),
+    ).toEqual([
+      ['Nhỏ', '-5000', '0.8', false],
+      ['Vừa', '0', '1', true],
+      ['Lớn', '10000', '1.5', false],
+    ]);
+    const beef = groups[1]!.options.find((o) => o.name === 'Thêm bò')!;
+    expect(beef.ingredients.map((i) => [i.ingredient.code, i.qty.toString()])).toEqual([
+      ['BO', '0.05'],
+      ['TRUNG', '1'],
+    ]);
+    expect(await prisma.dishOptionGroup.count({ where: { dishId: pho.id } })).toBe(2);
+
+    // Updating a price keeps the ingredients when the file lists none for that option.
+    const again = await xlsx('options', [['topping', '', '', '', 'thêm trứng', 6000, '', '', '', '', '']]);
+    expect(
+      (await client.imports.commit({ params: { kind: 'options' }, body: { fileBase64: again } })).body,
+    ).toEqual({ created: 0, updated: 1 });
+    const egg = await prisma.option.findFirstOrThrow({
+      where: { name: 'Thêm trứng' },
+      include: { ingredients: true },
+    });
+    expect([egg.price.toString(), egg.ingredients.length]).toEqual(['6000', 1]);
+  });
+
   it('rejects files missing required columns', async () => {
     const { client } = await makeUser({ username: 'quanly', role: 'ADMIN' });
     const wb = new ExcelJS.Workbook();

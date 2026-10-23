@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { AlertTriangle, Lock, Paperclip, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import type { ReceiptDetail, ReceiptInput, ReceiptSummary } from '@ketoan/api/contracts';
@@ -25,6 +25,9 @@ import {
   uploadSummary,
 } from '@/features/documents/DocumentFiles';
 import { useBusinessToday } from '@/lib/business-date';
+import { DateInput } from '@/components/DateInput';
+import { takeReceiptPrefill, type ReceiptPrefill } from './receipt-prefill';
+import { optionAlertRows } from '@/lib/option-alerts';
 
 /**
  * New purchase prices can push dishes over their food-cost target: remind the ADMIN right here.
@@ -37,8 +40,10 @@ function PriceAlertBanner() {
     queryFn: async () => ok(await client.pricing.alerts()),
     enabled: user?.role === 'ADMIN',
   });
-  const rows = q.data ?? [];
-  if (!rows.length) return null;
+  const all = q.data ?? [];
+  const rows = all.filter((r) => r.alert !== null);
+  const options = optionAlertRows(all).length;
+  if (!rows.length && !options) return null;
   const loss = rows.filter((r) => r.alert === 'LOSS').length;
   return (
     <Link
@@ -50,6 +55,7 @@ function PriceAlertBanner() {
       {[
         loss > 0 && `${loss} món đang lỗ`,
         rows.length - loss > 0 && `${rows.length - loss} món vượt % nguyên liệu mục tiêu`,
+        options > 0 && `${options} tuỳ chọn / topping cần xem giá`,
       ]
         .filter(Boolean)
         .join(', ')}{' '}
@@ -60,7 +66,12 @@ function PriceAlertBanner() {
 
 export function ReceiptsPage() {
   const [month, setMonth] = useState(thisMonth());
-  const [open, setOpen] = useState<number | 'new' | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [prefill] = useState(() => (params.get('from') === 'reorder' ? takeReceiptPrefill() : null));
+  const [open, setOpen] = useState<number | 'new' | null>(prefill ? 'new' : null);
+  useEffect(() => {
+    if (params.get('from')) setParams({}, { replace: true });
+  }, [params, setParams]);
   const list = useQuery({
     queryKey: ['receipts', month],
     queryFn: async () => ok(await client.inventory.listReceipts({ query: { month } })),
@@ -142,15 +153,39 @@ export function ReceiptsPage() {
               align: 'right',
               cell: (r) => <b className="num">{money(r.total)}</b>,
             },
+            {
+              key: 'owed',
+              header: 'Còn nợ',
+              align: 'right',
+              cell: (r) => <Owed receipt={r} />,
+            },
           ]}
         />
       </Card>
       {open !== null && (
-        <ReceiptEditor id={open === 'new' ? null : open} defaultMonth={month} onClose={() => setOpen(null)} />
+        <ReceiptEditor
+          id={open === 'new' ? null : open}
+          prefill={open === 'new' ? prefill : null}
+          defaultMonth={month}
+          onClose={() => setOpen(null)}
+        />
       )}
     </div>
   );
 }
+
+/** What is still owed on a receipt (payments pay the oldest receipts first). */
+function Owed({ receipt }: { receipt: ReceiptSummary }) {
+  if (receipt.paid === null) return <span className="text-faint">—</span>;
+  const left = Number(receipt.total) - Number(receipt.paid);
+  return left > 0 ? (
+    <span className="num font-semibold text-warn">{money(left)}</span>
+  ) : (
+    <span className="text-xs text-good">Đã trả</span>
+  );
+}
+
+type PayChoice = 'DEBT' | 'CASH' | 'TRANSFER';
 
 interface Line {
   key: number;
@@ -173,10 +208,13 @@ const m = (v: string) => parseMoney(v) || 0;
 function ReceiptEditor({
   id,
   defaultMonth,
+  prefill,
   onClose,
 }: {
   id: number | null;
   defaultMonth: string;
+  /** New receipt prefilled from "Cần nhập hàng". */
+  prefill?: ReceiptPrefill | null;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -203,14 +241,26 @@ function ReceiptEditor({
     id === null
       ? {
           kind: 'PURCHASE',
-          date: defaultMonth === thisMonth() ? bizToday : `${defaultMonth}-01`,
+          // '' = today's business date (resolved below: the settings may load after the form opens).
+          date: defaultMonth === thisMonth() ? '' : `${defaultMonth}-01`,
           supplier: '',
           note: '',
-          lines: [emptyLine()],
+          lines: prefill?.length
+            ? prefill.map((p) => ({
+                key: ++lineKey,
+                ingredientId: p.ingredientId,
+                qty: p.qty,
+                unitPrice: p.unitPrice,
+                unitMode: p.purchase ? 'PURCHASE' : 'STOCK',
+              }))
+            : [emptyLine()],
         }
       : null,
   );
   const [askReason, setAskReason] = useState<'update' | 'delete' | null>(null);
+  /** New purchase: paid now (cash from the till / transfer) or owed to the supplier; empty amount = all of it. */
+  const [pay, setPay] = useState<PayChoice>('CASH');
+  const [payAmount, setPayAmount] = useState('');
   /** Invoice photos picked while creating a new receipt; uploaded right after it is saved. */
   const [photos, setPhotos] = useState<File[]>([]);
   const [progress, setProgress] = useState<string | null>(null);
@@ -242,7 +292,7 @@ function ReceiptEditor({
 
   const body = (): ReceiptInput => ({
     kind: form!.kind,
-    date: form!.date,
+    date: form!.date || bizToday,
     supplier: form!.supplier.trim() || null,
     note: form!.note.trim() || null,
     items: form!.lines
@@ -253,6 +303,10 @@ function ReceiptEditor({
         unitPrice: String(m(l.unitPrice)),
         unitMode: l.unitMode,
       })),
+    payment:
+      form!.kind === 'PURCHASE' && pay !== 'DEBT'
+        ? { method: pay, amount: payAmount && form!.supplier.trim() ? payAmount : null }
+        : null,
   });
 
   const done = (msg: string) => {
@@ -261,6 +315,7 @@ function ReceiptEditor({
     qc.invalidateQueries({ queryKey: ['stock'] });
     qc.invalidateQueries({ queryKey: ['suppliers'] });
     qc.invalidateQueries({ queryKey: ['pricing'] });
+    qc.invalidateQueries({ queryKey: ['cash'] });
     onClose();
   };
 
@@ -349,12 +404,11 @@ function ReceiptEditor({
             </div>
             <Field label="Ngày">
               {(fid) => (
-                <Input
+                <DateInput
                   id={fid}
-                  type="date"
                   disabled={readOnly}
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  value={form.date || bizToday}
+                  onChange={(v) => setForm({ ...form, date: v })}
                 />
               )}
             </Field>
@@ -367,7 +421,11 @@ function ReceiptEditor({
                       list="supplier-list"
                       disabled={readOnly}
                       value={form.supplier}
-                      onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                      onChange={(e) => {
+                        setForm({ ...form, supplier: e.target.value });
+                        // Nobody to owe without a supplier name.
+                        if (!e.target.value.trim() && pay === 'DEBT') setPay('CASH');
+                      }}
                     />
                     <datalist id="supplier-list">
                       {suppliers.data?.map((x) => (
@@ -489,6 +547,63 @@ function ReceiptEditor({
               </span>
             </div>
           </div>
+          {form.kind === 'PURCHASE' && id === null && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[13px] font-medium">Thanh toán</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <Segmented
+                  label="Thanh toán"
+                  value={pay}
+                  onChange={setPay}
+                  options={[
+                    ...(form.supplier.trim() ? [{ value: 'DEBT' as const, label: 'Mua chịu' }] : []),
+                    { value: 'CASH', label: 'Tiền mặt' },
+                    { value: 'TRANSFER', label: 'Chuyển khoản' },
+                  ]}
+                />
+                {pay !== 'DEBT' && form.supplier.trim() && (
+                  <label className="flex items-center gap-2 text-[13px] text-muted">
+                    Trả ngay
+                    <Input
+                      inputMode="numeric"
+                      className="num h-9 w-36 text-right"
+                      aria-label="Số tiền trả ngay"
+                      placeholder={money(total)}
+                      value={payAmount ? money(payAmount) : ''}
+                      onChange={(e) => setPayAmount(e.target.value.replace(/\D/g, ''))}
+                    />
+                  </label>
+                )}
+              </div>
+              <p className="text-xs text-muted">
+                {pay === 'DEBT'
+                  ? 'Mua chịu: cộng vào công nợ nhà cung cấp — trả sau ở màn hình Nhà cung cấp.'
+                  : pay === 'CASH'
+                    ? 'Tiền mặt lấy từ két: tự ghi khoản chi vào sổ quỹ để cuối ngày két khớp.'
+                    : 'Chuyển khoản hoặc tiền ngoài két: không ảnh hưởng tiền mặt trong két.'}
+                {pay !== 'DEBT' &&
+                  form.supplier.trim() &&
+                  ' Để trống số tiền = trả đủ; trả thiếu phần còn lại ghi nợ.'}
+                {!form.supplier.trim() && ' Không có tên nhà cung cấp: ghi vào "Mua lẻ".'}
+              </p>
+            </div>
+          )}
+          {r && r.paid !== null && (
+            <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted">
+              Đã trả <b className="num text-ink">{money(r.paid)}</b>
+              {Number(r.total) > Number(r.paid) && (
+                <>
+                  · còn nợ <b className="num text-warn">{money(Number(r.total) - Number(r.paid))}</b>
+                </>
+              )}
+              <Link
+                to={`/admin/inventory/suppliers?id=${r.supplierId}`}
+                className="text-primary-ink hover:underline"
+              >
+                Xem sổ công nợ
+              </Link>
+            </p>
+          )}
           <Field label="Ghi chú">
             {(fid) => (
               <Input
@@ -538,7 +653,7 @@ function ReceiptEditor({
         open={askReason === 'delete'}
         danger
         title="Xoá phiếu nhập"
-        description="Các lô hàng của phiếu sẽ bị xoá khỏi kho."
+        description="Các lô hàng của phiếu sẽ bị xoá khỏi kho. Tiền đã trả cho phiếu này cũng được huỷ (cả khoản chi trong sổ quỹ)."
         confirmLabel="Xoá phiếu"
         onClose={() => setAskReason(null)}
         onConfirm={async (reason) => {

@@ -5,7 +5,8 @@ import { ArrowLeft, ClipboardCheck, Plus, Save } from 'lucide-react';
 import type { StocktakeDetail, StocktakeSummary } from '@ketoan/api/contracts';
 import { useAuth } from '@/auth/AuthProvider';
 import { PageHeader } from '@/components/PageHeader';
-import { MonthPicker, thisMonth, today } from '@/components/MonthPicker';
+import { MonthPicker, thisMonth } from '@/components/MonthPicker';
+import { useBusinessDateState } from '@/lib/business-date';
 import { ReasonDialog } from '@/components/ReasonDialog';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
@@ -16,8 +17,9 @@ import { useToast } from '@/components/ui/Toast';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok } from '@/lib/api-client';
-import { dateVi, money, parseQty, qty } from '@/lib/format';
+import { dateVi, money, parseQty, qty, qtyUnit } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { DateInput } from '@/components/DateInput';
 
 const STATUS = {
   DRAFT: { label: 'Nháp', tone: 'warn' },
@@ -110,7 +112,7 @@ export function StocktakeListPage() {
 }
 
 function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useBusinessDateState();
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -148,7 +150,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Ngày kiểm kê (tồn sổ sách tính đến cuối ngày này)
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateInput value={date} onChange={(v) => setDate(v)} />
         </label>
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Ghi chú
@@ -346,9 +348,7 @@ export function StocktakeEditPage() {
                   <Badge tone="warn">Nợ kho {qty(r.pendingQty)}</Badge>
                 </span>
               )}
-              <span className="block text-xs text-muted sm:hidden">
-                Sổ sách {qty(r.bookQty)} {r.unit}
-              </span>
+              <span className="block text-xs text-muted sm:hidden">Sổ sách {qtyUnit(r.bookQty, r.unit)}</span>
             </span>
             <span className="hidden text-muted sm:block">{r.unit}</span>
             <span className="num hidden text-right sm:block">{qty(r.bookQty)}</span>

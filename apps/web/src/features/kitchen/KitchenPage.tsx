@@ -63,9 +63,9 @@ const ServedIcon = ({ size = 18 }: { size?: number }) => (
 const STATION_KEY = 'ketoan.kitchen.station';
 const waitTone = (m: number) =>
   m >= 20
-    ? { fg: 'text-bad-ink', bg: 'bg-bad-soft' }
+    ? { fg: 'font-bold text-bad-ink', bg: 'bg-bad-soft' }
     : m >= 10
-      ? { fg: 'text-warn', bg: '' }
+      ? { fg: 'font-semibold text-warn', bg: 'bg-warn-soft' }
       : { fg: 'text-muted', bg: '' };
 
 /** Short chime when a new ticket arrives (no audio file needed). */
@@ -196,11 +196,11 @@ export function KitchenPage() {
           </LegendIcon>
           <span className="h-4 w-px bg-field" />
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-[3px] bg-warn" />
+            <span className="size-3.5 rounded-[3px] bg-warn-soft ring-1 ring-warn" />
             Chờ ≥ 10 phút
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-[3px] bg-bad" />
+            <span className="size-3.5 rounded-[3px] bg-bad-soft ring-2 ring-bad" />
             Chờ ≥ 20 phút
           </span>
         </div>

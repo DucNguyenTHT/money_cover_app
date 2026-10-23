@@ -24,6 +24,7 @@ const FIELD_KEYS = [
   'recipeFactor',
   'purchaseUnit',
   'purchaseFactor',
+  'minStock',
   'station',
   'storePrice',
   'appPrice',
@@ -32,6 +33,14 @@ const FIELD_KEYS = [
   'qty',
   'scope',
   'unitPrice',
+  'groupName',
+  'groupType',
+  'required',
+  'maxSelect',
+  'optionName',
+  'optionPrice',
+  'isDefault',
+  'dishCodes',
 ] as const;
 type FieldKey = (typeof FIELD_KEYS)[number];
 /** Every known column, '' when absent from the sheet. */
@@ -58,6 +67,12 @@ export const SPECS: Record<ImportKind, { title: string; columns: ColumnSpec[] }>
       { key: 'recipeFactor', header: '1 đơn vị kho = ? đơn vị định mức', example: 1000 },
       { key: 'purchaseUnit', header: 'Đơn vị mua', example: '' },
       { key: 'purchaseFactor', header: '1 đơn vị mua = ? đơn vị kho', example: '' },
+      {
+        key: 'minStock',
+        header: 'Tồn tối thiểu (đơn vị kho)',
+        example: '',
+        note: 'Để trống = không cảnh báo sắp hết',
+      },
     ],
   },
   dishes: {
@@ -91,6 +106,52 @@ export const SPECS: Record<ImportKind, { title: string; columns: ColumnSpec[] }>
       { key: 'ingredientCode', header: 'Mã nguyên liệu', example: 'NL001', required: true },
       { key: 'qty', header: 'Số lượng (đơn vị kho)', example: 12.5, required: true },
       { key: 'unitPrice', header: 'Giá vốn / đơn vị kho', example: 250000, required: true },
+    ],
+  },
+  options: {
+    title: 'Tuỳ chọn món',
+    columns: [
+      { key: 'groupName', header: 'Nhóm tuỳ chọn', example: 'Topping', required: true },
+      {
+        key: 'groupType',
+        header: 'Kiểu chọn',
+        example: 'Chọn nhiều',
+        note: '"Chọn 1" (size) hoặc "Chọn nhiều" (topping)',
+      },
+      { key: 'required', header: 'Bắt buộc', example: 'Không', note: '"Có" = phải chọn trước khi gọi món' },
+      {
+        key: 'maxSelect',
+        header: 'Chọn tối đa',
+        example: 3,
+        note: 'Chỉ cho nhóm chọn nhiều; để trống = không giới hạn',
+      },
+      { key: 'optionName', header: 'Tuỳ chọn', example: 'Thêm trứng', required: true },
+      {
+        key: 'optionPrice',
+        header: 'Giá cộng thêm',
+        example: 5000,
+        note: 'Có thể âm (size nhỏ); để trống = 0',
+      },
+      {
+        key: 'recipeFactor',
+        header: 'Nhân định mức',
+        example: 1,
+        note: 'Size: nhân cả định mức món (lớn 1,5; nhỏ 0,8). Để trống = 1',
+      },
+      { key: 'isDefault', header: 'Chọn sẵn', example: 'Không', note: '"Có" = tự chọn khi gọi món' },
+      {
+        key: 'ingredientCode',
+        header: 'Mã nguyên liệu thêm',
+        example: 'NL010',
+        note: 'Mỗi nguyên liệu một dòng (lặp lại nhóm + tuỳ chọn). Không có dòng nào = giữ nguyên liệu đang có',
+      },
+      { key: 'qty', header: 'Số lượng thêm (đơn vị định mức)', example: 1 },
+      {
+        key: 'dishCodes',
+        header: 'Áp dụng cho món',
+        example: 'PHO01, PHO02',
+        note: 'Mã món, cách nhau dấu phẩy: gắn nhóm vào các món này (không gỡ món đã gắn)',
+      },
     ],
   },
 };
@@ -236,6 +297,9 @@ async function plan(kind: ImportKind, rows: ParsedRow[]): Promise<Planned[]> {
       if (Number.isNaN(recipeFactor) || recipeFactor <= 0) errors.push('Hệ số định mức không hợp lệ');
       if (Number.isNaN(purchaseFactor) || purchaseFactor <= 0) errors.push('Hệ số đơn vị mua không hợp lệ');
       if (d.purchaseUnit && !d.purchaseFactor) errors.push('Có đơn vị mua thì phải có hệ số quy đổi');
+      const minStock = num(d.minStock ?? '');
+      if (Number.isNaN(minStock) || (minStock !== null && minStock < 0))
+        errors.push('Tồn tối thiểu không hợp lệ');
       dup(d.code.toLowerCase(), errors);
       const prev = existing.get(d.code.toLowerCase());
       const data = {
@@ -248,6 +312,7 @@ async function plan(kind: ImportKind, rows: ParsedRow[]): Promise<Planned[]> {
         recipeFactor: d.recipeUnit ? recipeFactor : 1,
         purchaseUnit: d.purchaseUnit || null,
         purchaseFactor,
+        ...(minStock !== null && !Number.isNaN(minStock) ? { minStock } : {}),
       };
       if (
         prev &&
@@ -385,6 +450,8 @@ async function plan(kind: ImportKind, rows: ParsedRow[]): Promise<Planned[]> {
     }));
   }
 
+  if (kind === 'options') return planOptions(rows, dup);
+
   // opening stock
   const ings = new Map((await prisma.ingredient.findMany()).map((x) => [x.code.toLowerCase(), x]));
   return rows.map(({ row, data: d }) => {
@@ -423,6 +490,161 @@ async function plan(kind: ImportKind, rows: ParsedRow[]): Promise<Planned[]> {
           },
         });
         await settlePendingWithLot(tx, lot.id);
+      },
+    };
+  });
+}
+
+const yes = (s: string) => /^(có|co|x|yes|true|1)$/i.test(s.trim());
+
+/**
+ * Option groups and options, matched by name (any letter case). One row per option, or per extra ingredient of an
+ * option (repeat the group and option). Group settings may sit on any of its rows but must agree.
+ */
+async function planOptions(
+  rows: ParsedRow[],
+  dup: (key: string, errors: string[]) => void,
+): Promise<Planned[]> {
+  const [groups, dishes, ings] = await Promise.all([
+    prisma.optionGroup.findMany({ include: { options: true } }),
+    prisma.dish.findMany(),
+    prisma.ingredient.findMany(),
+  ]);
+  const dishByCode = new Map(dishes.map((x) => [x.code.toLowerCase(), x]));
+  const ingByCode = new Map(ings.map((x) => [x.code.toLowerCase(), x]));
+  const groupByName = new Map(groups.map((g) => [g.name.toLowerCase(), g]));
+  type GroupSet = { multi?: boolean; required?: boolean; maxSelect?: number; dishes: Set<number> };
+  const gsets = new Map<string, GroupSet>();
+  const firstOf = new Map<string, { price: number; factor: number; isDefault: boolean }>();
+
+  const parsed = rows.map(({ row, data: d }) => {
+    const errors: string[] = [];
+    const gName = d.groupName.trim();
+    const oName = d.optionName.trim();
+    if (!gName) errors.push('Thiếu nhóm tuỳ chọn');
+    if (!oName) errors.push('Thiếu tên tuỳ chọn');
+    const gk = gName.toLowerCase();
+    const ok = `${gk}|${oName.toLowerCase()}`;
+    const g = gsets.get(gk) ?? { dishes: new Set<number>() };
+    gsets.set(gk, g);
+    const agree = <K extends 'multi' | 'required' | 'maxSelect'>(k: K, v: GroupSet[K], label: string) => {
+      if (g[k] !== undefined && g[k] !== v) errors.push(`${label} khác với dòng trên của nhóm`);
+      else g[k] = v;
+    };
+    if (d.groupType) agree('multi', /nhi/i.test(d.groupType), 'Kiểu chọn');
+    if (d.required) agree('required', yes(d.required), 'Bắt buộc');
+    if (d.maxSelect) {
+      const n = num(d.maxSelect);
+      if (n === null || Number.isNaN(n) || n < 1 || !Number.isInteger(n))
+        errors.push('Chọn tối đa phải là số nguyên ≥ 1');
+      else agree('maxSelect', n, 'Chọn tối đa');
+    }
+    const price = num(d.optionPrice) ?? 0;
+    if (Number.isNaN(price)) errors.push('Giá cộng thêm không hợp lệ');
+    const factor = num(d.recipeFactor) ?? 1;
+    if (Number.isNaN(factor) || factor <= 0) errors.push('Nhân định mức phải lớn hơn 0');
+    const isDefault = yes(d.isDefault);
+    const first = firstOf.get(ok);
+    if (first && (first.price !== price || first.factor !== factor || first.isDefault !== isDefault))
+      errors.push('Giá / nhân định mức / chọn sẵn khác với dòng trên của cùng tuỳ chọn');
+    if (!first) firstOf.set(ok, { price, factor, isDefault });
+
+    const ing = d.ingredientCode ? ingByCode.get(d.ingredientCode.toLowerCase()) : undefined;
+    const qty = num(d.qty);
+    if (d.ingredientCode) {
+      if (!ing) errors.push(`Không có nguyên liệu mã "${d.ingredientCode}"`);
+      if (qty === null || Number.isNaN(qty) || qty <= 0) errors.push('Số lượng thêm phải lớn hơn 0');
+    } else if (d.qty) errors.push('Có số lượng thêm thì phải có mã nguyên liệu');
+    for (const code of d.dishCodes
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean)) {
+      const dish = dishByCode.get(code.toLowerCase());
+      if (dish) g.dishes.add(dish.id);
+      else errors.push(`Không có món mã "${code}"`);
+    }
+    dup(`${ok}|${d.ingredientCode.toLowerCase()}`, errors);
+    return { row, gk, ok, gName, oName, price, factor, isDefault, ing, qty: qty ?? 0, errors };
+  });
+
+  // Pick-one groups: at most one option picked by default.
+  for (const [gk, g] of gsets) {
+    const multi = g.multi ?? groupByName.get(gk)?.multi ?? false;
+    if (g.maxSelect !== undefined && !multi)
+      parsed.find((p) => p.gk === gk)?.errors.push('Nhóm chọn 1 không có "Chọn tối đa"');
+    const defaults = new Set(parsed.filter((p) => p.gk === gk && p.isDefault).map((p) => p.ok));
+    if (!multi && defaults.size > 1)
+      parsed
+        .find((p) => p.gk === gk && p.isDefault)
+        ?.errors.push('Nhóm chọn 1 chỉ được có 1 tuỳ chọn chọn sẵn');
+  }
+
+  return parsed.map((p, idx) => {
+    const existing = groupByName
+      .get(p.gk)
+      ?.options.find((o) => o.name.toLowerCase() === p.oName.toLowerCase());
+    const firstOfGroup = parsed.findIndex((x) => x.gk === p.gk) === idx;
+    const firstOfOption = parsed.findIndex((x) => x.ok === p.ok) === idx;
+    return {
+      row: p.row,
+      action: p.errors.length ? 'ERROR' : existing ? 'UPDATE' : 'CREATE',
+      label: `${p.gName} › ${p.oName}${p.ing ? ` + ${p.ing.name}` : ''}`,
+      errors: p.errors,
+      apply: async (tx: Tx) => {
+        let group = await tx.optionGroup.findFirst({
+          where: { name: { equals: p.gName, mode: 'insensitive' } },
+        });
+        if (firstOfGroup) {
+          const s = gsets.get(p.gk)!;
+          const data = {
+            ...(s.multi !== undefined ? { multi: s.multi } : {}),
+            ...(s.required !== undefined ? { required: s.required } : {}),
+            ...(s.maxSelect !== undefined ? { maxSelect: s.maxSelect } : {}),
+          };
+          group = group
+            ? await tx.optionGroup.update({ where: { id: group.id }, data })
+            : await tx.optionGroup.create({ data: { name: p.gName, ...data } });
+          for (const dishId of s.dishes) {
+            const sort = await tx.dishOptionGroup.count({ where: { dishId } });
+            await tx.dishOptionGroup.upsert({
+              where: { dishId_groupId: { dishId, groupId: group.id } },
+              create: { dishId, groupId: group.id, sort },
+              update: {},
+            });
+          }
+        }
+        if (!firstOfOption) return;
+        const g = group!;
+        const fields = { price: String(p.price), recipeFactor: String(p.factor), isDefault: p.isDefault };
+        const prev = await tx.option.findFirst({
+          where: { groupId: g.id, name: { equals: p.oName, mode: 'insensitive' } },
+        });
+        const option = prev
+          ? await tx.option.update({ where: { id: prev.id }, data: fields })
+          : await tx.option.create({
+              data: {
+                ...fields,
+                groupId: g.id,
+                name: p.oName,
+                sort: await tx.option.count({ where: { groupId: g.id } }),
+              },
+            });
+        if (p.isDefault && !g.multi)
+          await tx.option.updateMany({
+            where: { groupId: g.id, id: { not: option.id } },
+            data: { isDefault: false },
+          });
+        const lines = parsed.filter((x) => x.ok === p.ok && x.ing);
+        if (lines.length) {
+          await tx.optionIngredient.deleteMany({ where: { optionId: option.id } });
+          await tx.optionIngredient.createMany({
+            data: lines.map((l) => ({
+              optionId: option.id,
+              ingredientId: l.ing!.id,
+              qty: recipeToStock(l.qty, l.ing!.recipeFactor.toString()).toDecimalPlaces(4).toString(),
+            })),
+          });
+        }
       },
     };
   });

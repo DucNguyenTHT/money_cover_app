@@ -8,7 +8,6 @@ import { useAuth } from '@/auth/AuthProvider';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
 import { Badge, Card, Segmented, Select } from '@/components/ui/controls';
 import { DataTable } from '@/components/ui/DataTable';
 import { useToast } from '@/components/ui/Toast';
@@ -20,6 +19,7 @@ import { usePosMaybe } from '@/pos/context';
 import { CHANNEL_LABEL, posKeys, useOrder, usePosSettings, whereLabel } from '@/pos/data';
 import { CancelOrderDialog } from '@/pos/OrderDialogs';
 import { billHtml, printHtml } from '@/pos/print';
+import { DateInput } from '@/components/DateInput';
 
 const STATUS: Record<OrderStatus, { label: string; tone: 'primary' | 'good' | 'bad' }> = {
   OPEN: { label: 'Đang mở', tone: 'primary' },
@@ -77,23 +77,11 @@ export function OrderListPage({ inPos = false }: { inPos?: boolean }) {
           <div className="flex flex-wrap items-end gap-2.5 border-b border-line p-3">
             <label className="flex flex-col gap-1 text-xs text-muted">
               Từ ngày
-              <Input
-                type="date"
-                value={from}
-                max={to}
-                onChange={(e) => setFrom(e.target.value)}
-                className="w-40"
-              />
+              <DateInput value={from} max={to} onChange={(v) => setFrom(v)} className="w-40" />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
               Đến ngày
-              <Input
-                type="date"
-                value={to}
-                min={from}
-                onChange={(e) => setTo(e.target.value)}
-                className="w-40"
-              />
+              <DateInput value={to} min={from} onChange={(v) => setTo(v)} className="w-40" />
             </label>
             <div className="w-40">
               <Select

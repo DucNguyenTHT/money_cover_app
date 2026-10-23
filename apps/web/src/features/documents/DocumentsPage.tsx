@@ -34,6 +34,7 @@ import {
 } from './DocumentFiles';
 import { DriveDialog } from './DriveDialog';
 import { useBusinessToday } from '@/lib/business-date';
+import { DateInput } from '@/components/DateInput';
 
 const KIND_TONE: Record<DocumentKind, BadgeTone> = { PURCHASE: 'primary', SALE: 'good', OTHER: 'neutral' };
 
@@ -416,12 +417,11 @@ export function DocumentEditor({
             </div>
             <Field label="Ngày chứng từ">
               {(fid) => (
-                <Input
+                <DateInput
                   id={fid}
-                  type="date"
                   disabled={readOnly}
                   value={form.date}
-                  onChange={(e) => set({ date: e.target.value })}
+                  onChange={(v) => set({ date: v })}
                 />
               )}
             </Field>

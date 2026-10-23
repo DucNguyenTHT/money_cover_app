@@ -23,6 +23,9 @@ const pairs: [string, readonly string[], Record<string, string>][] = [
   ['StocktakeStatus', D.STOCKTAKE_STATUSES, Prisma.StocktakeStatus],
   ['DocumentKind', D.DOCUMENT_KINDS, Prisma.DocumentKind],
   ['TaxGroup', D.TAX_GROUPS, Prisma.TaxGroup],
+  ['CashDirection', D.CASH_DIRECTIONS, Prisma.CashDirection],
+  ['PayType', D.PAY_TYPES, Prisma.PayType],
+  ['PayrollStatus', D.PAYROLL_STATUSES, Prisma.PayrollStatus],
 ];
 
 describe('enum sync', () => {

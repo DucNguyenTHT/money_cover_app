@@ -11,6 +11,7 @@ import {
   Clock,
   KeyRound,
   Landmark,
+  PackageSearch,
   PackageX,
   TrendingDown,
   type LucideIcon,
@@ -87,6 +88,18 @@ export function alertItems(d: Dashboard): AlertItem[] {
       n: d.alerts.priceAlerts - d.alerts.lossDishes,
       text: 'món vượt % nguyên liệu mục tiêu',
       to: '/admin/menu/price-alerts',
+    },
+    {
+      icon: BadgeAlert,
+      n: d.alerts.optionAlerts,
+      text: 'tuỳ chọn / topping lỗ hoặc vượt % nguyên liệu',
+      to: '/admin/menu/price-alerts',
+    },
+    {
+      icon: PackageSearch,
+      n: d.alerts.lowStock,
+      text: 'nguyên liệu sắp hết / hết hàng',
+      to: '/admin/inventory/reorder',
     },
     {
       icon: PackageX,

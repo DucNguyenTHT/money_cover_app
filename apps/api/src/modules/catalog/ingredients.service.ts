@@ -22,6 +22,7 @@ export const toIngredientDto = (i: WithUsage): IngredientDto => ({
   purchaseFactor: i.purchaseFactor.toString(),
   category: i.category,
   active: i.active,
+  minStock: i.minStock?.toString() ?? null,
   unitsLocked: i._count.lots > 0 || i._count.recipeItems > 0 || i._count.optionItems > 0,
 });
 

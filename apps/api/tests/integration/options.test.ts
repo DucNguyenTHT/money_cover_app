@@ -4,6 +4,7 @@ import { toDbDate } from '../../src/domain/business-date';
 import { businessToday } from '../../src/modules/settings/settings.service';
 import type { OptionGroupDto } from '../../src/contracts/menu.contract';
 import type { OrderDto } from '../../src/contracts/orders.contract';
+import type { PricingDetail, PricingRow } from '../../src/contracts/pricing.contract';
 import { makeUser, resetDb, startServer, stopServer } from '../helpers/harness';
 import { branchId, makeIngredient } from '../helpers/factories';
 
@@ -343,5 +344,33 @@ describe('stocktake with options', () => {
       dishAllocations: { dishId: number | null; lossValue: string }[];
     };
     expect(done.dishAllocations).toEqual([expect.objectContaining({ dishId: s.pho, lossValue: '6000' })]);
+  });
+});
+
+describe('pricing with options', () => {
+  it('the cost sheet and price alerts show what each option earns', async () => {
+    const s = await setup();
+    const d = (await s.c.pricing.detail({ params: { id: s.pho }, query: {} })).body as { row: PricingDetail };
+    const by = (name: string) => d.row.options.find((o) => o.name === name)!;
+    // 200 g beef at 200.000/kg = 40.000 a portion; large = ×1.5 for 10.000 more.
+    expect(by('Lớn')).toMatchObject({
+      kind: 'SIZE',
+      extraCost: '20000',
+      price: '60000',
+      cost: '60000',
+      alert: 'LOSS',
+    });
+    expect(by('Trứng')).toMatchObject({
+      kind: 'ADDON',
+      price: '5000',
+      cost: '3000',
+      foodCostPct: '60',
+      alert: 'OVER_TARGET',
+    });
+    expect(by('Quẩy')).toMatchObject({ cost: '0', alert: null });
+    expect(by('Ít cay')).toMatchObject({ price: '0', alert: null });
+    expect(d.row.optionAlert).toBe('LOSS');
+    const alerts = (await s.c.pricing.alerts()).body as PricingRow[];
+    expect(alerts.map((r) => [r.name, r.optionAlert])).toEqual([['Phở bò', 'LOSS']]);
   });
 });

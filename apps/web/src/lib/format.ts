@@ -12,6 +12,38 @@ export const moneyVnd = (v: number | string | null | undefined) => `${money(v)} 
 
 export const qty = (v: number | string) => qtyFmt.format(Number(v));
 
+/** Units counted in whole pieces: their stock shows at most one decimal ("12 cái", not "11,998 cái"). */
+const COUNT_UNITS = new Set([
+  'cái',
+  'chiếc',
+  'chai',
+  'lon',
+  'hộp',
+  'quả',
+  'trái',
+  'gói',
+  'bó',
+  'túi',
+  'bịch',
+  'cuộn',
+  'ly',
+  'cốc',
+  'con',
+  'miếng',
+  'thùng',
+  'két',
+  'bao',
+  'vỉ',
+  'cây',
+  'tờ',
+  'phần',
+]);
+const pieceFmt = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
+
+/** Quantity followed by its unit, rounded to suit the unit. */
+export const qtyUnit = (v: number | string, unit: string) =>
+  `${(COUNT_UNITS.has(unit.trim().toLowerCase()) ? pieceFmt : qtyFmt).format(Number(v))} ${unit}`;
+
 /** Quantity typed by a user: "1,5" and "1.5" both mean 1.5 (no thousands separators in quantities). */
 export function parseQty(v: string): number {
   const s = v.trim().replace(/\s/g, '').replace(',', '.');

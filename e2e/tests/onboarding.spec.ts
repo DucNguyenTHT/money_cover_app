@@ -5,7 +5,8 @@ import ExcelJS from 'exceljs';
 /**
  * A brand-new shop, exactly as the owner meets it: first login → new password → PIN → shop name →
  * Excel import of ingredients, dishes, recipes, opening stock → sell one bowl → see it in the P&L.
- * Needs a FRESH database: ONBOARD_PASS = the temporary admin password printed by the seed.
+ * Needs a FRESH database: ONBOARD_PASS = the temporary admin password (set by setup-db.mjs on the e2e database;
+ * against a real fresh install, the one printed by the seed). Runs before the other specs (playwright.config.ts).
  */
 const TEMP = process.env.ONBOARD_PASS ?? '';
 const NEW_PASS = 'Quan-pho-2026';

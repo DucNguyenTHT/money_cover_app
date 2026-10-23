@@ -135,9 +135,10 @@ export function IngredientsPage() {
   );
 }
 
-type FormValues = Omit<IngredientDto, 'id' | 'purchaseUnit' | 'category'> & {
+type FormValues = Omit<IngredientDto, 'id' | 'purchaseUnit' | 'category' | 'minStock'> & {
   purchaseUnit: string;
   category: string;
+  minStock: string;
 };
 
 function IngredientForm({
@@ -152,7 +153,12 @@ function IngredientForm({
   const toast = useToast();
   const { register, handleSubmit, watch, setValue } = useForm<FormValues>({
     defaultValues: item
-      ? { ...item, purchaseUnit: item.purchaseUnit ?? '', category: item.category ?? '' }
+      ? {
+          ...item,
+          purchaseUnit: item.purchaseUnit ?? '',
+          category: item.category ?? '',
+          minStock: item.minStock ?? '',
+        }
       : {
           code: '',
           name: '',
@@ -164,6 +170,7 @@ function IngredientForm({
           purchaseFactor: '1',
           category: '',
           active: true,
+          minStock: '',
         },
   });
   const v = watch();
@@ -172,7 +179,12 @@ function IngredientForm({
 
   const save = useMutation({
     mutationFn: async (f: FormValues) => {
-      const body = { ...f, purchaseUnit: f.purchaseUnit.trim() || null, category: f.category.trim() || null };
+      const body = {
+        ...f,
+        purchaseUnit: f.purchaseUnit.trim() || null,
+        category: f.category.trim() || null,
+        minStock: f.minStock.trim() ? f.minStock.trim().replace(',', '.') : null,
+      };
       return item
         ? ok(await client.catalog.updateIngredient({ params: { id: item.id }, body }))
         : ok(await client.catalog.createIngredient({ body }));
@@ -256,6 +268,21 @@ function IngredientForm({
             )}
           </Field>
         </fieldset>
+
+        <Field
+          label={`Tồn tối thiểu (${v.unit || 'đơn vị kho'})`}
+          hint='Dưới mức này là "sắp hết" và có trong Kho → Cần nhập hàng. Để trống = không nhắc.'
+        >
+          {(id, d) => (
+            <Input
+              id={id}
+              aria-describedby={d}
+              inputMode="decimal"
+              className="num text-right"
+              {...register('minStock')}
+            />
+          )}
+        </Field>
 
         {item && (
           <div className="sm:col-span-2">

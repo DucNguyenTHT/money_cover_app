@@ -117,6 +117,21 @@ enum DocumentKind {
 }
 
 /// Business line for household tax (tỷ lệ % trên doanh thu). Rates live in src/domain/tax/household.ts.
+enum CashDirection {
+  IN
+  OUT
+}
+
+enum PayType {
+  HOURLY
+  MONTHLY
+}
+
+enum PayrollStatus {
+  DRAFT
+  CLOSED
+}
+
 enum TaxGroup {
   DISTRIBUTION
   SERVICE
@@ -164,7 +179,7 @@ model User {
 
 /// Nguyên liệu
 /// Danh mục nguyên liệu và bao bì dùng trong định mức món, nhập / xuất / kiểm kê kho.
-/// Lưu: mã, tên, loại (nguyên liệu / bao bì), đơn vị kho, đơn vị định mức và hệ số quy đổi, đơn vị mua (thùng, bao…), nhóm.
+/// Lưu: mã, tên, loại (nguyên liệu / bao bì), đơn vị kho, đơn vị định mức và hệ số quy đổi, đơn vị mua (thùng, bao…), nhóm, tồn tối thiểu.
 model Ingredient {
   id             Int            @id @default(autoincrement())
   code           String         @unique
@@ -175,6 +190,8 @@ model Ingredient {
   recipeFactor   Decimal        @default(1) @map("recipe_factor") @db.Decimal(16, 4)
   purchaseUnit   String?        @map("purchase_unit")
   purchaseFactor Decimal        @default(1) @map("purchase_factor") @db.Decimal(16, 4)
+  /// Tồn tối thiểu (đơn vị kho): dưới mức này là "sắp hết", gợi ý nhập hàng
+  minStock       Decimal?       @map("min_stock") @db.Decimal(16, 4)
   category       String?
   active         Boolean        @default(true)
 
@@ -645,13 +662,17 @@ model Receipt {
   branchId    Int         @map("branch_id")
   kind        ReceiptKind @default(PURCHASE)
   date        DateTime    @db.Date
+  /// Name as written on the receipt (kept for old receipts and the list)
   supplier    String?
+  supplierId  Int?        @map("supplier_id")
   note        String?
   createdById Int         @map("created_by")
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
-  items     ReceiptItem[]
-  documents Document[]
+  items       ReceiptItem[]
+  documents   Document[]
+  supplierRef Supplier?         @relation(fields: [supplierId], references: [id])
+  payments    SupplierPayment[]
 
   @@index([branchId, date])
   @@map("receipts")
@@ -840,6 +861,203 @@ model StocktakeDishAllocation {
   @@map("stocktake_dish_allocations")
 }
 
+// ---------------------------------------------------------------- money & staff
+
+/// Sổ quỹ tiền mặt
+/// Thu / chi tiền mặt ngoài bán hàng (chi chợ, rút tiền, nộp ngân hàng, trả NCC, trả lương…); chốt ngày tính vào tiền mặt phải có.
+/// Lưu: ngày kinh doanh, thu / chi, khoản mục, số tiền, ghi chú, nguồn tự động, người ghi, huỷ (lý do).
+model CashEntry {
+  id            Int           @id @default(autoincrement())
+  branchId      Int           @map("branch_id")
+  businessDate  DateTime      @map("business_date") @db.Date
+  direction     CashDirection
+  category      String
+  amount        Decimal       @db.Decimal(16, 2)
+  note          String?
+  /// Created by another screen: SUPPLIER_PAYMENT / PAYROLL (with its id); null = typed in the cash book
+  source        String?
+  sourceId      Int?          @map("source_id")
+  createdById   Int           @map("created_by")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  cancelledAt   DateTime?     @map("cancelled_at") @db.Timestamptz
+  cancelledById Int?          @map("cancelled_by")
+  cancelReason  String?       @map("cancel_reason")
+
+  @@index([branchId, businessDate])
+  @@index([source, sourceId])
+  @@map("cash_entries")
+}
+
+/// Nhà cung cấp
+/// Nơi mua nguyên liệu; công nợ = tổng phiếu nhập − tổng đã trả.
+/// Lưu: tên, điện thoại, địa chỉ, ghi chú, đang dùng.
+model Supplier {
+  id      Int     @id @default(autoincrement())
+  name    String  @unique
+  phone   String?
+  address String?
+  note    String?
+  active  Boolean @default(true)
+
+  receipts Receipt[]
+  payments SupplierPayment[]
+
+  @@map("suppliers")
+}
+
+/// Trả tiền nhà cung cấp
+/// Mỗi lần trả nợ (tiền mặt thì tự ghi chi vào sổ quỹ).
+/// Lưu: nhà cung cấp, ngày, số tiền, hình thức, phiếu nhập (nếu trả cho 1 phiếu), ghi chú, huỷ (lý do).
+model SupplierPayment {
+  id            Int       @id @default(autoincrement())
+  branchId      Int       @map("branch_id")
+  supplierId    Int       @map("supplier_id")
+  date          DateTime  @db.Date
+  amount        Decimal   @db.Decimal(16, 2)
+  /// CASH / TRANSFER
+  method        String
+  receiptId     Int?      @map("receipt_id")
+  note          String?
+  createdById   Int       @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelledById Int?      @map("cancelled_by")
+  cancelReason  String?   @map("cancel_reason")
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  receipt  Receipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+
+  @@index([supplierId])
+  @@map("supplier_payments")
+}
+
+/// Nhân viên
+/// Người làm ở quán (có hoặc không có tài khoản đăng nhập), cách trả lương.
+/// Lưu: tên, điện thoại, vị trí, lương theo giờ / theo tháng, mức lương, tài khoản gắn kèm, đang làm.
+model Employee {
+  id       Int     @id @default(autoincrement())
+  name     String
+  phone    String?
+  position String?
+  payType  PayType @default(HOURLY) @map("pay_type")
+  /// HOURLY: per hour; MONTHLY: per month
+  rate     Decimal @db.Decimal(16, 2)
+  /// Login of this person (self check-in at the till)
+  userId   Int?    @unique @map("user_id")
+  active   Boolean @default(true)
+
+  attendance   Attendance[]
+  payrollLines PayrollLine[]
+  advances     SalaryAdvance[]
+
+  @@map("employees")
+}
+
+/// Ca làm
+/// Ca mẫu để xếp lịch (ca sáng 06:00–14:00…).
+/// Lưu: tên, giờ bắt đầu, giờ kết thúc, thứ tự, đang dùng.
+model Shift {
+  id     Int     @id @default(autoincrement())
+  name   String
+  /// "HH:mm"
+  start  String
+  end    String
+  sort   Int     @default(0)
+  active Boolean @default(true)
+
+  attendance Attendance[]
+
+  @@map("shifts")
+}
+
+/// Lịch & chấm công
+/// Một dòng cho mỗi nhân viên mỗi ngày: ca được xếp và giờ vào / ra thực tế; giờ công tính từ giờ vào / ra.
+/// Lưu: nhân viên, ngày, ca, giờ vào, giờ ra, ghi chú.
+model Attendance {
+  id         Int       @id @default(autoincrement())
+  employeeId Int       @map("employee_id")
+  date       DateTime  @db.Date
+  shiftId    Int?      @map("shift_id")
+  checkIn    DateTime? @map("check_in") @db.Timestamptz
+  checkOut   DateTime? @map("check_out") @db.Timestamptz
+  note       String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift    Shift?   @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("attendance")
+}
+
+/// Bảng lương tháng
+/// Lương của mọi nhân viên trong tháng; chốt thì ghi tổng vào chi phí chung tháng đó.
+/// Lưu: tháng, trạng thái (nháp / đã chốt), người chốt, dòng chi phí chung đã tạo.
+model Payroll {
+  id                Int           @id @default(autoincrement())
+  branchId          Int           @map("branch_id")
+  year              Int
+  month             Int
+  status            PayrollStatus @default(DRAFT)
+  closedAt          DateTime?     @map("closed_at") @db.Timestamptz
+  closedById        Int?          @map("closed_by")
+  overheadExpenseId Int?          @map("overhead_expense_id")
+
+  lines PayrollLine[]
+
+  @@unique([branchId, year, month])
+  @@map("payrolls")
+}
+
+/// Dòng bảng lương
+/// Lương một nhân viên trong tháng: giờ công × lương giờ (hoặc lương tháng) + thưởng − phạt; trừ tạm ứng ra số còn trả.
+/// Lưu: nhân viên, giờ công, đơn giá, lương cơ bản, thưởng, phạt, tạm ứng, còn trả, ngày trả, ghi chú.
+model PayrollLine {
+  id         Int       @id @default(autoincrement())
+  payrollId  Int       @map("payroll_id")
+  employeeId Int       @map("employee_id")
+  payType    PayType   @map("pay_type")
+  hours      Decimal   @default(0) @db.Decimal(8, 2)
+  rate       Decimal   @db.Decimal(16, 2)
+  basePay    Decimal   @map("base_pay") @db.Decimal(16, 2)
+  bonus      Decimal   @default(0) @db.Decimal(16, 2)
+  deduction  Decimal   @default(0) @db.Decimal(16, 2)
+  advance    Decimal   @default(0) @db.Decimal(16, 2)
+  note       String?
+  paidAt     DateTime? @map("paid_at") @db.Timestamptz
+  /// CASH / TRANSFER
+  paidMethod String?   @map("paid_method")
+
+  payroll  Payroll  @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([payrollId, employeeId])
+  @@map("payroll_lines")
+}
+
+/// Tạm ứng lương
+/// Tiền đưa trước cho nhân viên trong tháng; bảng lương tháng đó tự trừ. Tạm ứng tiền mặt tự ghi chi vào sổ quỹ.
+/// Lưu: nhân viên, ngày, số tiền, hình thức (tiền mặt / chuyển khoản), ghi chú, người ghi, huỷ (lý do).
+model SalaryAdvance {
+  id            Int       @id @default(autoincrement())
+  employeeId    Int       @map("employee_id")
+  date          DateTime  @db.Date
+  amount        Decimal   @db.Decimal(16, 2)
+  /// CASH / TRANSFER
+  method        String
+  note          String?
+  createdById   Int       @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelledById Int?      @map("cancelled_by")
+  cancelReason  String?   @map("cancel_reason")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, date])
+  @@map("salary_advances")
+}
+
 // ---------------------------------------------------------------- documents (scanned invoices)
 // Archive only: documents never change stock or P&L figures. Rows and files are soft-deleted,
 // the file itself stays on disk (UPLOAD_DIR) so nothing is ever lost.
@@ -874,20 +1092,25 @@ model Document {
 /// Ảnh / PDF / XML của một chứng từ; file thật nằm trong thư mục storage/documents.
 /// Lưu: tên file, loại, dung lượng, đường dẫn file và ảnh thu nhỏ, mã sha256 chống trùng, người tải, xoá mềm.
 model DocumentFile {
-  id          Int       @id @default(autoincrement())
-  documentId  Int       @map("document_id")
-  name        String
-  mime        String
-  size        Int
+  id             Int       @id @default(autoincrement())
+  documentId     Int       @map("document_id")
+  name           String
+  mime           String
+  size           Int
   /**
    * Relative to UPLOAD_DIR, e.g. 2026/10/<uuid>.jpg
    */
-  path        String
-  thumbPath   String?   @map("thumb_path")
-  sha256      String
-  createdById Int       @map("created_by")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  path           String
+  thumbPath      String?   @map("thumb_path")
+  sha256         String
+  createdById    Int       @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  /**
+   * Telegram file_id once the file was sent to the backup chat: lets the server download it again
+   * (Khôi phục ảnh chứng từ) when the file is lost on disk.
+   */
+  telegramFileId String?   @map("telegram_file_id")
 
   document Document @relation(fields: [documentId], references: [id])
 

@@ -28,6 +28,18 @@ export const receiptInput = z.object({
       }),
     )
     .min(1, 'Phiếu phải có ít nhất 1 dòng'),
+  /**
+   * Paid when the goods arrive (purchases only; ignored on edit). Absent: nothing paid now — owed to the supplier.
+   * Cash comes out of the till: it is written to the cash book.
+   */
+  payment: z
+    .object({
+      method: z.enum(['CASH', 'TRANSFER']),
+      /** null = the whole receipt. */
+      amount: decimalString.refine((v) => Number(v) > 0, 'Số tiền phải lớn hơn 0').nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 export type ReceiptInput = z.infer<typeof receiptInput>;
 
@@ -36,6 +48,9 @@ export const receiptSummary = z.object({
   kind: z.enum(RECEIPT_KINDS),
   date: isoDate,
   supplier: z.string().nullable(),
+  supplierId: z.number().nullable(),
+  /** Paid on this receipt so far; null = debts not tracked (no supplier, opening stock). */
+  paid: decimalString.nullable(),
   itemCount: z.number(),
   total: decimalString,
   createdBy: z.string(),
@@ -130,6 +145,17 @@ export const stockRow = z.object({
   pendingQty: decimalString,
   value: decimalString,
   lastPrice: decimalString.nullable(),
+  minStock: decimalString.nullable(),
+  /** Average use per day over the last USAGE_DAYS days (sales, internal use, disposal). */
+  dailyUse: decimalString,
+  /** Days the stock lasts at that pace (null = not used lately). */
+  daysLeft: z.number().nullable(),
+  status: z.enum(['OUT', 'LOW', 'OK']),
+  /** Suggested purchase in stock units, and in purchase units (thùng, bao…). */
+  suggestQty: decimalString,
+  suggestPurchaseQty: decimalString,
+  purchaseUnit: z.string().nullable(),
+  purchaseFactor: decimalString,
 });
 export type StockRow = z.infer<typeof stockRow>;
 
@@ -176,7 +202,7 @@ export const inventoryContract = c.router(
       method: 'PUT',
       path: '/api/receipts/:id',
       pathParams: id,
-      body: receiptInput.extend({ reason }),
+      body: receiptInput.omit({ payment: true }).extend({ reason }),
       metadata: staff,
       responses: { 200: receiptDetail, ...commonErrors },
     },

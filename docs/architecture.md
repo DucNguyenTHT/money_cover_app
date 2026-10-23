@@ -32,7 +32,9 @@ api: modules ──► contracts, domain, core
 - `domain` không import Prisma / Express / Node / contracts.
 - `contracts` chỉ import `domain` và zod.
 - Web chỉ import 2 cổng `@ketoan/api/contracts` và `@ketoan/api/domain` (trỏ thẳng vào mã nguồn TS; Vite tự biên dịch).
-- Feature bán hàng (`tables`, `order-entry`, `payment`, `order-history`, `kitchen`, `day-closing`) và feature quản trị không import lẫn nhau.
+- Feature bán hàng (`tables`, `order-entry`, `payment`, `order-history`, `kitchen`, `day-closing`, `cash`) và feature quản trị không import lẫn nhau.
+- Tiền ra vào két do màn hình khác sinh ra (trả nhà cung cấp, trả lương, tạm ứng) đi qua `modules/cash` (`addTx`,
+  `cancelBySourceTx`) trong cùng transaction, đánh dấu `source` / `source_id` để chỉ huỷ được ở màn hình gốc.
 
 ## Luồng một yêu cầu
 
@@ -62,7 +64,9 @@ api: modules ──► contracts, domain, core
 Các spec e2e: `pos-order-flow` (bán → bếp → thanh toán → huỷ), `inventory-flow` (kiểm kê → phân bổ → huỷ),
 `a11y` (quét axe WCAG A/AA 14 màn chính, lỗi nghiêm trọng là trượt), `onboarding` (cài mới từ đầu → nhập Excel → bán → lãi lỗ).
 
-`onboarding` cần một hệ thống **trắng**, ví dụ bản production vừa dựng:
+`onboarding` cần một hệ thống **trắng**. `pnpm e2e` tự lo: `setup-db.mjs` để tài khoản `admin` của DB `ketoan_e2e`
+ở trạng thái lần đầu đăng nhập với mật khẩu tạm `ONBOARD_PASS` (mặc định `Tam-thoi-2026`), và project `onboarding`
+chạy trước các spec khác (Playwright `dependencies`). Chạy vào bản production vừa dựng:
 
 ```powershell
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build

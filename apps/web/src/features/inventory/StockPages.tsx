@@ -10,7 +10,7 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Dialog } from '@/components/ui/Dialog';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { client, ok } from '@/lib/api-client';
-import { dateVi, money, qty } from '@/lib/format';
+import { dateVi, money, qty, qtyUnit } from '@/lib/format';
 import { REASON } from './IssuesPage';
 
 export function StockPage() {
@@ -51,30 +51,33 @@ export function StockPage() {
           onRowClick={setLotsOf}
           empty={<EmptyState title="Chưa có nguyên liệu" />}
           columns={[
-            { key: 'name', header: 'Nguyên liệu', cell: (r) => r.name },
+            {
+              key: 'name',
+              header: 'Nguyên liệu',
+              cell: (r) => (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {r.name}
+                  {r.status !== 'OK' && (
+                    <Badge tone={r.status === 'OUT' ? 'bad' : 'warn'}>
+                      {r.status === 'OUT' ? 'Hết hàng' : 'Sắp hết'}
+                    </Badge>
+                  )}
+                </span>
+              ),
+            },
             { key: 'category', header: 'Nhóm', secondary: true, cell: (r) => r.category ?? '—' },
             {
               key: 'qty',
               header: 'Tồn',
               align: 'right',
-              cell: (r) => (
-                <span className="num">
-                  {qty(r.qtyOnHand)} {r.unit}
-                </span>
-              ),
+              cell: (r) => <span className="num">{qtyUnit(r.qtyOnHand, r.unit)}</span>,
             },
             {
               key: 'pending',
               header: 'Nợ kho',
               align: 'right',
               cell: (r) =>
-                Number(r.pendingQty) > 0 ? (
-                  <Badge tone="warn">
-                    {qty(r.pendingQty)} {r.unit}
-                  </Badge>
-                ) : (
-                  '—'
-                ),
+                Number(r.pendingQty) > 0 ? <Badge tone="warn">{qtyUnit(r.pendingQty, r.unit)}</Badge> : '—',
             },
             {
               key: 'last',
@@ -125,7 +128,7 @@ function LotsDialog({ row, onClose }: { row: StockRow; onClose: () => void }) {
             align: 'right',
             cell: (l) => (
               <span className="num">
-                {qty(l.qtyRemaining)} / {qty(l.qtyIn)} {row.unit}
+                {qty(l.qtyRemaining)} / {qtyUnit(l.qtyIn, row.unit)}
               </span>
             ),
           },
@@ -161,11 +164,7 @@ export function PendingPage() {
               key: 'qty',
               header: 'Còn thiếu',
               align: 'right',
-              cell: (r) => (
-                <b className="num">
-                  {qty(r.pendingQty)} {r.unit}
-                </b>
-              ),
+              cell: (r) => <b className="num">{qtyUnit(r.pendingQty, r.unit)}</b>,
             },
             {
               key: 'price',

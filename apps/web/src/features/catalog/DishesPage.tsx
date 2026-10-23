@@ -25,14 +25,16 @@ import { FormError } from '@/auth/AuthCard';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { dateVi, money, parseMoney, parseQty } from '@/lib/format';
-import { useBusinessToday } from '@/lib/business-date';
+import { useBusinessDateState, useBusinessToday } from '@/lib/business-date';
 import { priceTypeLabel, useDeliveryApps } from '@/lib/delivery-apps';
+import { DateInput } from '@/components/DateInput';
 
 type Row = DishDto & { cost?: PricingRow };
 
 export function DishesPage() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<number | 'all'>('all');
+  const [status, setStatus] = useState<'active' | 'inactive' | 'all'>('active');
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [showCats, setShowCats] = useState(false);
   const dishes = useQuery({
@@ -54,10 +56,11 @@ export function DishesPage() {
       .filter(
         (d) =>
           (cat === 'all' || d.categoryId === cat) &&
+          (status === 'all' || (status === 'active') === d.active) &&
           (!t || d.name.toLowerCase().includes(t) || d.code.toLowerCase().includes(t)),
       )
       .map((d) => ({ ...d, cost: pricing.data?.rows.find((r) => r.dishId === d.id) }));
-  }, [dishes.data, pricing.data, q, cat]);
+  }, [dishes.data, pricing.data, q, cat, status]);
 
   return (
     <div>
@@ -97,6 +100,16 @@ export function DishesPage() {
               </option>
             ))}
           </Select>
+          <Segmented
+            label="Lọc trạng thái"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: 'active', label: 'Đang bán' },
+              { value: 'inactive', label: 'Ngừng bán' },
+              { value: 'all', label: 'Tất cả' },
+            ]}
+          />
           <span className="ml-auto text-[13px] text-muted">{rows.length} món</span>
         </div>
         <DataTable<Row>
@@ -431,8 +444,7 @@ function PricesTab({ dish }: { dish: DishDetail }) {
   const [type, setType] = useState<PriceType>('STORE');
   const [appId, setAppId] = useState<number | null>(null);
   const [price, setPrice] = useState('');
-  const bizToday = useBusinessToday();
-  const [from, setFrom] = useState(bizToday);
+  const [from, setFrom] = useBusinessDateState();
   const save = useMutation({
     mutationFn: async () =>
       ok(
@@ -535,7 +547,7 @@ function PricesTab({ dish }: { dish: DishDetail }) {
             )}
           </Field>
           <Field label="Áp dụng từ ngày">
-            {(id) => <Input id={id} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}
+            {(id) => <DateInput id={id} value={from} onChange={(v) => setFrom(v)} />}
           </Field>
           <Button
             variant="primary"
@@ -597,7 +609,7 @@ function RecipeTab({ dish }: { dish: DishDetail }) {
   const [versionId, setVersionId] = useState<number | 'new'>(current?.id ?? 'new');
   const version = dish.recipes.find((r) => r.id === versionId);
   const startFrom = (r = version) => ({
-    from: r && !r.used ? r.effectiveFrom : bizToday,
+    from: r && !r.used ? r.effectiveFrom : '',
     note: r?.note ?? '',
     lines: (r?.items ?? []).map((i) => ({
       key: ++rk,
@@ -622,7 +634,7 @@ function RecipeTab({ dish }: { dish: DishDetail }) {
     setVersionId(v);
     const r = v === 'new' ? version : dish.recipes.find((x) => x.id === v);
     const s = startFrom(r);
-    setForm(v === 'new' ? { ...s, from: bizToday, note: '' } : s);
+    setForm(v === 'new' ? { ...s, from: '', note: '' } : s);
   };
 
   const save = useMutation({
@@ -631,7 +643,7 @@ function RecipeTab({ dish }: { dish: DishDetail }) {
         await client.menu.saveRecipe({
           params: { id: dish.id },
           body: {
-            effectiveFrom: form.from,
+            effectiveFrom: form.from || bizToday,
             note: form.note.trim() || null,
             items: form.lines
               .filter((l) => l.ingredientId && parseQty(l.qty) > 0)
@@ -642,7 +654,7 @@ function RecipeTab({ dish }: { dish: DishDetail }) {
     onSuccess: (d) => {
       toast('Đã lưu định mức');
       invalidate();
-      const saved = d.recipes.find((r) => r.effectiveFrom === form.from);
+      const saved = d.recipes.find((r) => r.effectiveFrom === (form.from || bizToday));
       if (saved) setVersionId(saved.id);
     },
   });
@@ -674,12 +686,11 @@ function RecipeTab({ dish }: { dish: DishDetail }) {
         </Field>
         <Field label="Áp dụng từ ngày">
           {(id) => (
-            <Input
+            <DateInput
               id={id}
-              type="date"
               className="w-44"
-              value={form.from}
-              onChange={(e) => setForm({ ...form, from: e.target.value })}
+              value={form.from || bizToday}
+              onChange={(v) => setForm({ ...form, from: v })}
             />
           )}
         </Field>

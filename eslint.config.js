@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
-const POS_FEATURES = ['tables', 'order-entry', 'payment', 'order-history', 'kitchen', 'day-closing'];
+const POS_FEATURES = ['tables', 'order-entry', 'payment', 'order-history', 'kitchen', 'day-closing', 'cash'];
 const ADMIN_FEATURES = [
   'dashboard',
   'catalog',
@@ -13,6 +13,7 @@ const ADMIN_FEATURES = [
   'accounting',
   'reports',
   'system',
+  'staff',
 ];
 const featurePatterns = (names) => names.map((n) => ({ group: [`@/features/${n}`, `@/features/${n}/*`] }));
 

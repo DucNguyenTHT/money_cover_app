@@ -61,7 +61,11 @@ async function pendingNow(db: Db, branchId: number) {
   return new Map(rows.map((r) => [r.ingredientId, r._sum.pendingQty?.toString() ?? '0']));
 }
 
-/** Start of the allocation period: the previous completed stocktake, else the opening stock, else nothing. */
+/**
+ * Start of the allocation period — sales AFTER this business date count: the previous completed stocktake (counted at
+ * the end of its day), else the day before the opening stock (it is the stock at the start of that day, so that day's
+ * sales count), else nothing.
+ */
 async function periodStart(db: Db, branchId: number, date: string, selfId: number): Promise<string | null> {
   const prev = await db.stocktake.findFirst({
     where: { branchId, status: 'DONE', id: { not: selfId }, date: { lt: toDbDate(date) } },
@@ -72,7 +76,7 @@ async function periodStart(db: Db, branchId: number, date: string, selfId: numbe
     where: { branchId, kind: 'OPENING' },
     orderBy: { date: 'asc' },
   });
-  return opening ? fromDbDate(opening.date) : null;
+  return opening ? fromDbDate(new Date(opening.date.getTime() - 86_400_000)) : null;
 }
 
 /**

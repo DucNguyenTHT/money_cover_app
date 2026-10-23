@@ -8,6 +8,7 @@ import {
   ReceiptText,
   Settings2,
   UtensilsCrossed,
+  Wallet,
   WifiOff,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
@@ -18,6 +19,7 @@ import { PosProvider, usePos } from '@/pos/context';
 import { ApprovalProvider } from '@/pos/Approval';
 import { usePosRealtime } from '@/pos/data';
 import { SearchInput } from '@/components/ui/SearchInput';
+import { ClockInButton } from '@/components/ClockInButton';
 
 /** Full-screen selling layout: tabs + dish search, no sidebar. */
 export function PosLayout() {
@@ -70,6 +72,9 @@ function PosShell() {
         <NavLink to="/pos/orders" className={tab} aria-label="Đơn hàng">
           <ReceiptText size={18} /> <span className="hidden md:inline">Đơn hàng</span>
         </NavLink>
+        <NavLink to="/pos/cash" className={tab} aria-label="Sổ quỹ">
+          <Wallet size={18} /> <span className="hidden md:inline">Sổ quỹ</span>
+        </NavLink>
         <NavLink to="/pos/day-closing" className={tab} aria-label="Chốt ngày">
           <CalendarCheck size={18} /> <span className="hidden md:inline">Chốt ngày</span>
         </NavLink>
@@ -88,6 +93,7 @@ function PosShell() {
         <div className="flex-1" />
         <div className="mb-2 flex items-center gap-1 text-[13px]">
           <span className="hidden px-2 xl:inline">{user?.fullName}</span>
+          <ClockInButton />
           <Link
             to="/kitchen"
             aria-label="Màn hình bếp"

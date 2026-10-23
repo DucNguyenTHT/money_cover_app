@@ -10,12 +10,14 @@ import { priceEntries } from '../menu/menu.service';
 import {
   chooseOverheadRate,
   costSheet,
+  optionPricing,
   priceAlert,
   suggestAppPrice,
   suggestStorePrice,
   type ChannelCost,
   type OverheadChoice,
 } from '../../domain/pricing/pricing';
+import { groupsForDishes } from '../menu/options.service';
 import type {
   ChannelCostDto,
   PricingContext,
@@ -134,6 +136,18 @@ async function buildRows(
     },
     orderBy: [{ category: { sort: 'asc' } }, { sort: 'asc' }, { name: 'asc' }],
   });
+  const groups = await groupsForDishes(
+    prisma,
+    dishes.map((d) => d.id),
+  );
+  const extraIds = [...groups.values()]
+    .flat()
+    .flatMap((g) => g.options.flatMap((o) => o.ingredients.map((i) => i.ingredientId)));
+  const extraNames = new Map(
+    (
+      await prisma.ingredient.findMany({ where: { id: { in: extraIds } }, select: { id: true, name: true } })
+    ).map((i) => [i.id, i.name]),
+  );
   return dishes.map((d) => {
     const versions = d.recipes.map((r) => ({ effectiveFrom: fromDbDate(r.effectiveFrom), r }));
     const recipe = pickVersion(versions, today)?.r;
@@ -194,6 +208,53 @@ async function buildRows(
     ];
     const alert = alerts.includes('LOSS') ? 'LOSS' : alerts[0] === 'OVER_TARGET' ? 'OVER_TARGET' : null;
 
+    const options = (groups.get(d.id) ?? [])
+      .filter((g) => g.active)
+      .flatMap((g) =>
+        g.options
+          .filter((o) => o.active)
+          .map((o) => {
+            const r = optionPricing({
+              optionPrice: o.price,
+              recipeFactor: o.recipeFactor,
+              extras: o.ingredients.map((i) => ({
+                qty: i.qty,
+                unitPrice: prices.get(i.ingredientId) ?? null,
+              })),
+              dishCost: sheet.DINE_IN.directCost,
+              dishPrice: storePrice,
+              overheadPct: ctx.overheadPct,
+              targetPct: target,
+              tolerancePct: s.alert_tolerance_pct,
+              step: s.price_rounding,
+            });
+            return {
+              optionId: o.id,
+              groupName: g.name,
+              name: o.name,
+              kind: r.kind,
+              optionPrice: D(o.price).toString(),
+              recipeFactor: D(o.recipeFactor).toString(),
+              extraCost: r.extraCost.toString(),
+              price: str(r.price),
+              cost: r.cost.toString(),
+              profit: str(r.profit),
+              foodCostPct: str(r.foodCostPct),
+              suggestedPrice: str(r.suggested),
+              // A size without the dish recipe has no cost to judge.
+              alert: r.kind === 'SIZE' && !recipe ? null : r.alert,
+              missingPrices: o.ingredients
+                .filter((i) => !prices.has(i.ingredientId))
+                .map((i) => extraNames.get(i.ingredientId) ?? ''),
+            };
+          }),
+      );
+    const optionAlert = options.some((o) => o.alert === 'LOSS')
+      ? 'LOSS'
+      : options.some((o) => o.alert === 'OVER_TARGET')
+        ? 'OVER_TARGET'
+        : null;
+
     return {
       dishId: d.id,
       code: d.code,
@@ -207,6 +268,8 @@ async function buildRows(
       suggestedAppPrice: str(suggestFor(ctx.app?.commissionPct ?? '0')),
       apps,
       alert: recipe ? alert : null,
+      options,
+      optionAlert,
       lines: items.map((i) => {
         const p = prices.get(i.ingredientId) ?? null;
         const factor = i.ingredient.recipeFactor.toString();
@@ -242,5 +305,5 @@ export async function detail(dishId: number, appId?: number) {
 
 export async function alerts() {
   const ctx = await context();
-  return (await buildRows(ctx)).map(stripLines).filter((r) => r.alert !== null);
+  return (await buildRows(ctx)).map(stripLines).filter((r) => r.alert !== null || r.optionAlert !== null);
 }

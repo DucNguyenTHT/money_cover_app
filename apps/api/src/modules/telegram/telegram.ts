@@ -106,6 +106,25 @@ export async function sendDocument(
   form.set('chat_id', chatId);
   form.set('caption', caption.slice(0, 1024));
   form.set('document', await openAsBlob(file), fileName);
-  const msg = await call<{ message_id: number }>(token, 'sendDocument', form);
-  return { messageId: msg.message_id, size };
+  const msg = await call<{ message_id: number; document?: { file_id: string } }>(token, 'sendDocument', form);
+  return { messageId: msg.message_id, size, fileId: msg.document?.file_id ?? null };
+}
+
+/** Bots may download files up to 20 MB (getFile). */
+export const MAX_DOWNLOAD = 20 * 1024 * 1024;
+
+/** Download a file the bot sent earlier, by its file_id. */
+export async function downloadFile(token: string, fileId: string): Promise<Buffer> {
+  const f = await call<{ file_path?: string; file_size?: number }>(token, 'getFile', { file_id: fileId });
+  if (!f.file_path) throw telegramError('Telegram không còn giữ file này');
+  if ((f.file_size ?? 0) > MAX_DOWNLOAD)
+    throw telegramError('File lớn hơn 20 MB — bot Telegram không tải về được');
+  let res: Response;
+  try {
+    res = await fetch(`${API}/file/bot${token}/${f.file_path}`);
+  } catch {
+    throw telegramError('Không kết nối được Telegram — kiểm tra Internet của máy chủ');
+  }
+  if (!res.ok) throw telegramError(`Tải file từ Telegram lỗi ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
 }

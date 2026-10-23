@@ -1,12 +1,14 @@
 // Telegram bot as a backup destination: the ADMIN enters the bot token (sealed) and picks the chat the
 // backups go to. Stored in `settings` under TELEGRAM_KEY (not part of the public settings schema).
+import { createHash } from 'node:crypto';
+import { stat } from 'node:fs/promises';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../core/db';
 import { writeAudit } from '../../core/audit';
 import { badRequest, conflict } from '../../core/errors';
 import { open, seal } from '../../core/secret-box';
-import type { TelegramChat, TelegramStatus } from '../../contracts/telegram.contract';
-import { storedPath } from '../../core/storage';
+import type { RestoreStatus, TelegramChat, TelegramStatus } from '../../contracts/telegram.contract';
+import { storedPath, storeFile } from '../../core/storage';
 import { DOCUMENT_KIND_LABELS } from '../../contracts/documents.contract';
 import { fromDbDate } from '../../domain/business-date';
 import type { DocumentKind } from '../../domain/enums';
@@ -218,7 +220,10 @@ export async function sendDocuments(limit: number, pauseMs: number): Promise<Doc
     try {
       for (let attempt = 0; ; attempt++) {
         try {
-          await tg.sendDocument(t, chatId, storedPath(f.path), caption(f), f.name);
+          const { fileId } = await tg.sendDocument(t, chatId, storedPath(f.path), caption(f), f.name);
+          // Kept so the file can be downloaded again if it is lost on disk (restoreDocuments).
+          if (fileId)
+            await prisma.documentFile.update({ where: { id: f.id }, data: { telegramFileId: fileId } });
           break;
         } catch (e) {
           if (!(e instanceof tg.RateLimitError) || attempt > 0) throw e;
@@ -242,4 +247,62 @@ export async function sendDocuments(limit: number, pauseMs: number): Promise<Doc
   }
   const pending = await prisma.documentFile.count({ where: { id: { gt: cursor }, ...live } });
   return { sent, pending, error };
+}
+
+// ---- restore: invoice files lost on disk (server replaced, database restored) are downloaded again.
+
+const liveFiles = { deletedAt: null, document: { deletedAt: null } } as const;
+const onDisk = (rel: string) =>
+  stat(storedPath(rel)).then(
+    () => true,
+    () => false,
+  );
+
+async function missingFiles() {
+  const files = await prisma.documentFile.findMany({ where: liveFiles, orderBy: { id: 'asc' } });
+  const out: typeof files = [];
+  for (const f of files) if (!(await onDisk(f.path))) out.push(f);
+  return out;
+}
+
+export async function restoreStatus(): Promise<RestoreStatus> {
+  const missing = await missingFiles();
+  return { missing: missing.length, restorable: missing.filter((f) => f.telegramFileId).length };
+}
+
+/**
+ * Download missing invoice files back from Telegram, `limit` per call (the screen calls again while some are left).
+ * Each file must match its recorded sha256; thumbnails were never sent, so a lost one is dropped (the full image is
+ * shown instead).
+ */
+export async function restoreDocuments(userId: number, limit = 20) {
+  const s = await load();
+  if (!s) throw conflict('TELEGRAM_NOT_SET', 'Chưa cài bot Telegram — nhập lại mã bot đã dùng để gửi file');
+  const t = await token(s);
+  const todo = (await missingFiles()).filter((f) => f.telegramFileId);
+  let restored = 0;
+  const failed: { name: string; message: string }[] = [];
+  for (const f of todo.slice(0, limit)) {
+    try {
+      const bytes = await tg.downloadFile(t, f.telegramFileId!);
+      if (createHash('sha256').update(bytes).digest('hex') !== f.sha256)
+        throw new Error('File tải về không khớp bản gốc');
+      await storeFile(f.path, bytes);
+      if (f.thumbPath && !(await onDisk(f.thumbPath)))
+        await prisma.documentFile.update({ where: { id: f.id }, data: { thumbPath: null } });
+      restored++;
+    } catch (e) {
+      if (e instanceof tg.BadTokenError) throw badToken();
+      failed.push({ name: f.name, message: (e as Error).message });
+    }
+  }
+  if (restored)
+    await writeAudit(prisma, {
+      entity: 'document_file',
+      entityId: 'telegram',
+      action: 'RESTORE',
+      after: { restored, failed: failed.length },
+      userId,
+    });
+  return { restored, failed, remaining: todo.length - restored };
 }
