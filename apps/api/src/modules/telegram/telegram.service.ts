@@ -1,5 +1,6 @@
 // Telegram bot as a backup destination: the ADMIN enters the bot token (sealed) and picks the chat the
-// backups go to. Stored in `settings` under TELEGRAM_KEY (not part of the public settings schema).
+// backups go to. Reports and alerts for the owner go to the same chat or to another one (reportChatId).
+// Stored in `settings` under TELEGRAM_KEY (not part of the public settings schema).
 import { createHash } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import type { Prisma } from '@prisma/client';
@@ -24,6 +25,9 @@ interface Stored {
   chatTitle: string | null;
   /** Last document_files.id already sent to this chat (files are sent in id order). */
   docsCursor?: number;
+  /** Where reports and alerts go; null = the backup chat (a manager may read reports but not get the data). */
+  reportChatId?: string | null;
+  reportChatTitle?: string | null;
 }
 
 async function load(): Promise<Stored | null> {
@@ -61,6 +65,9 @@ export async function status(): Promise<TelegramStatus> {
     chatId: s?.chatId ?? null,
     chatTitle: s?.chatTitle ?? null,
     ready: !!s?.chatId,
+    reportChatId: s?.reportChatId ?? null,
+    reportChatTitle: s?.reportChatTitle ?? null,
+    reportReady: !!(s?.reportChatId ?? s?.chatId),
   };
 }
 
@@ -81,6 +88,8 @@ export async function saveToken(userId: number, botToken: string) {
     botUsername: me.username,
     chatId: sameBot ? old!.chatId : null,
     chatTitle: sameBot ? old!.chatTitle : null,
+    reportChatId: sameBot ? (old!.reportChatId ?? null) : null,
+    reportChatTitle: sameBot ? (old!.reportChatTitle ?? null) : null,
   });
   await writeAudit(prisma, {
     entity: 'telegram',
@@ -128,6 +137,53 @@ export async function setChat(userId: number, chatId: string, title: string) {
     userId,
   });
   return status();
+}
+
+/** Reports and alerts to another chat (`chatId` null = back to the backup chat); a test message confirms it. */
+export async function setReportChat(userId: number, chatId: string | null, title: string | null) {
+  const s = await load();
+  if (!s) throw conflict('TELEGRAM_NOT_SET', 'Chưa nhập mã bot Telegram');
+  const target = chatId ?? s.chatId;
+  if (target) {
+    try {
+      await tg.sendMessage(
+        await token(s),
+        target,
+        '✅ Kế toán quán: báo cáo chốt ngày, tin nhắc việc buổi sáng và cảnh báo sẽ được gửi vào đây.',
+      );
+    } catch (e) {
+      if (e instanceof tg.BadTokenError) throw badToken();
+      throw e;
+    }
+  }
+  await save({ ...s, reportChatId: chatId, reportChatTitle: chatId ? title : null });
+  await writeAudit(prisma, {
+    entity: 'telegram',
+    entityId: 'report_chat',
+    action: 'SET_REPORT_CHAT',
+    after: { chatId, title },
+    userId,
+  });
+  return status();
+}
+
+/** Where reports and alerts go now, or null when Telegram is not set up. */
+export async function reportChat(): Promise<string | null> {
+  const s = await load();
+  return s?.reportChatId ?? s?.chatId ?? null;
+}
+
+/** Send one report / alert (HTML) to the report chat. Throws the Telegram errors (the queue retries). */
+export async function sendReport(html: string) {
+  const s = await load();
+  const chatId = s?.reportChatId ?? s?.chatId;
+  if (!s || !chatId) throw conflict('TELEGRAM_NOT_SET', 'Chưa chọn nơi nhận báo cáo trên Telegram');
+  try {
+    await tg.sendHtml(await token(s), chatId, html);
+  } catch (e) {
+    if (e instanceof tg.BadTokenError) throw badToken();
+    throw e;
+  }
 }
 
 export async function clear(userId: number) {

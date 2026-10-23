@@ -152,19 +152,19 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 
 ## Quyền
 
-|                                                              | ADMIN | STAFF                           | KITCHEN       |
-| ------------------------------------------------------------ | ----- | ------------------------------- | ------------- |
-| Bán hàng, chốt ngày                                          | ✓     | ✓                               |               |
-| Màn hình bếp / bar                                           | ✓     | ✓                               | trạm của mình |
-| Phiếu nhập / xuất, kiểm kê nháp                              | ✓     | ✓                               |               |
-| Sổ quỹ: ghi khoản thu chi                                    | ✓     | ✓ (huỷ: khoản mình, trong ngày) |               |
-| Nhà cung cấp: xem công nợ, trả tiền                          | ✓     | ✓                               |               |
-| Nhà cung cấp: thêm / sửa, huỷ lần trả                        | ✓     |                                 |               |
-| Nhân viên, chấm công, bảng lương, tạm ứng                    | ✓     |                                 |               |
-| Tự vào ca / ra ca (tài khoản gắn với nhân viên)              | ✓     | ✓                               | ✓             |
-| Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ | ✓     |                                 |               |
-| Sao lưu dữ liệu, Google Drive, Telegram                      | ✓     |                                 |               |
-| Thấy giá vốn / lãi                                           | ✓     | (API tự bỏ các trường này)      |               |
+|                                                               | ADMIN | STAFF                           | KITCHEN       |
+| ------------------------------------------------------------- | ----- | ------------------------------- | ------------- |
+| Bán hàng, chốt ngày                                           | ✓     | ✓                               |               |
+| Màn hình bếp / bar                                            | ✓     | ✓                               | trạm của mình |
+| Phiếu nhập / xuất, kiểm kê nháp                               | ✓     | ✓                               |               |
+| Sổ quỹ: ghi khoản thu chi                                     | ✓     | ✓ (huỷ: khoản mình, trong ngày) |               |
+| Nhà cung cấp: xem công nợ, trả tiền                           | ✓     | ✓                               |               |
+| Nhà cung cấp: thêm / sửa, huỷ lần trả                         | ✓     |                                 |               |
+| Nhân viên, chấm công, bảng lương, tạm ứng                     | ✓     |                                 |               |
+| Tự vào ca / ra ca (tài khoản gắn với nhân viên)               | ✓     | ✓                               | ✓             |
+| Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ  | ✓     |                                 |               |
+| Sao lưu dữ liệu, Google Drive, Telegram, báo cáo qua Telegram | ✓     |                                 |               |
+| Thấy giá vốn / lãi                                            | ✓     | (API tự bỏ các trường này)      |               |
 
 ## Sao lưu dữ liệu
 
@@ -186,3 +186,20 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
   Drive / qua Telegram.
 - Google Client ID / secret nhập trong Cài đặt (secret mã hoá, không gửi ra trình duyệt); đổi Client ID thì kết
   nối Drive cũ bị ngắt.
+
+## Báo cáo & cảnh báo qua Telegram
+
+Cùng bot Telegram với sao lưu. Tin gửi vào cuộc trò chuyện nhận sao lưu, hoặc một **nhóm riêng** (Cài đặt › Báo cáo &
+cảnh báo › Chọn nơi khác) để người quản lý đọc báo cáo mà không nhận file dữ liệu.
+
+| Tin                   | Khi nào                                              | Nội dung                                                                                                                                      |
+| --------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Báo cáo chốt ngày     | Mỗi lần chốt ngày (chốt lại → tin "Chốt lại ngày")   | Doanh thu thuần, số đơn / khách, so với ngày bán trước, lãi gộp tạm tính, tiền theo hình thức, tiền két lệch, giảm giá, huỷ, bán dưới giá vốn |
+| Việc cần chú ý (sáng) | Mỗi ngày một lần từ giờ `notify_morning_hour` (8:00) | Doanh số ngày bán trước, ngày chưa chốt, đơn còn mở, hàng sắp hết, nợ kho, món lỗ / vượt mục tiêu, sao lưu lỗi, ngưỡng doanh thu thuế         |
+| Cảnh báo ngay         | Lúc xảy ra                                           | Huỷ đơn **đã thanh toán**; giảm giá vượt mức do ADMIN duyệt PIN (ADMIN tự giảm thì không báo); thanh toán **dưới giá vốn**                    |
+
+- Tiền két lệch từ `notify_cash_diff` (mặc định 20.000 đ) được tô đậm + ⚠️.
+- Tin được ghi vào hàng đợi **trong cùng transaction** với thao tác gây ra nó: thao tác lỗi / bị huỷ thì không có tin.
+  Máy chủ mất mạng → tin chờ, tự gửi lại; quá 1 ngày không gửi được thì bỏ. Telegram từ chối một tin 5 lần → bỏ tin đó,
+  các tin sau vẫn gửi. Cài đặt hiện số tin đang chờ và lỗi gần nhất.
+- Mỗi loại tin bật / tắt riêng. "Gửi thử tin Việc cần chú ý" gửi ngay (không chờ giờ).

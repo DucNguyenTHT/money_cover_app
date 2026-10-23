@@ -26,4 +26,9 @@ export const DEFAULT_SETTINGS: Settings = {
   backup_drive: true,
   backup_telegram: true,
   backup_telegram_documents: true,
+  notify_daily: true,
+  notify_morning: true,
+  notify_morning_hour: 8,
+  notify_alerts: true,
+  notify_cash_diff: 20_000,
 };

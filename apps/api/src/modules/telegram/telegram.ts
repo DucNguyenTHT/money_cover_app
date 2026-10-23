@@ -91,6 +91,15 @@ export async function recentChats(token: string): Promise<Chat[]> {
 export const sendMessage = (token: string, chatId: string, text: string) =>
   call(token, 'sendMessage', { chat_id: chatId, text });
 
+/** A message using Telegram's HTML formatting (<b>…</b>); the caller escapes what people typed. */
+export const sendHtml = (token: string, chatId: string, html: string) =>
+  call(token, 'sendMessage', {
+    chat_id: chatId,
+    text: html,
+    parse_mode: 'HTML',
+    link_preview_options: { is_disabled: true },
+  });
+
 /** Send a file from disk as a document (streamed from disk by openAsBlob). */
 export async function sendDocument(
   token: string,

@@ -338,7 +338,7 @@ function architectureSection() {
             <div class="layer-row">
               <div class="layer l2"><b>contracts</b><span>API dùng chung web ↔ api (zod)</span></div>
               <div class="layer l3"><b>domain</b><span>nghiệp vụ thuần: FIFO, giá (theo kênh / app), đơn, kiểm kê, lãi lỗ, thuế, quyền chứng từ, lịch sao lưu</span></div>
-              <div class="layer l4"><b>core</b><span>db (Prisma), auth JWT, audit, khoá sổ, realtime, in ESC/POS, storage, mã hoá · lịch sao lưu (modules/backup)</span></div>
+              <div class="layer l4"><b>core</b><span>db (Prisma), auth JWT, audit, khoá sổ, realtime, in ESC/POS, storage, mã hoá · lịch sao lưu (modules/backup) · hàng đợi tin Telegram (modules/notify)</span></div>
             </div>
           </div>
         </div>
@@ -354,7 +354,7 @@ function architectureSection() {
     <div class="arrow">Internet (tuỳ chọn)</div>
     <div class="row">
       ${box('Google Drive của chủ quán', 'bản sao lưu hằng đêm (tự động) · .zip chứng từ (bấm tay) · OAuth mã thiết bị, Client ID nhập trong Cài đặt · quyền drive.file', 'cloud')}
-      ${box('Telegram của chủ quán', 'bot gửi file sao lưu hằng đêm + từng file chứng từ mới vào chat / nhóm đã chọn · ≤ 50 MB / file', 'cloud')}
+      ${box('Telegram của chủ quán', 'bot gửi file sao lưu hằng đêm + từng file chứng từ mới (≤ 50 MB / file) · báo cáo chốt ngày, tin buổi sáng, cảnh báo (có thể vào nhóm khác)', 'cloud')}
       ${box('Ổ cứng ngoài / OneDrive', 'scripts/backup-db.ps1 lúc 03:00 chép backups/ + ảnh chứng từ → BACKUP_COPY_DIR', 'cloud')}
     </div>
   </div>
@@ -547,6 +547,32 @@ function flowsSection() {
         'Lấy lại ảnh chứng từ',
         'file thiếu trên máy → tải lại từ Telegram theo file_id (≤ 20 MB), phải khớp sha256',
         'document_files.telegram_file_id · sha256',
+      ],
+    ]),
+    flow('Báo cáo & cảnh báo cho chủ quán', 'Qua bot Telegram; ở ngoài quán vẫn biết tình hình.', [
+      [
+        'Xếp hàng',
+        'ghi tin trong cùng transaction với thao tác gây ra nó (thao tác bị huỷ thì không có tin); tin trùng khoá chỉ ghi 1 lần',
+        'telegram_messages',
+      ],
+      [
+        'Chốt ngày',
+        'doanh thu, lãi gộp tạm tính, tiền theo hình thức, tiền két lệch (⚠️ từ mức cài đặt)',
+        'notify_daily',
+      ],
+      [
+        'Buổi sáng',
+        'mỗi ngày 1 tin lúc notify_morning_hour: ngày chưa chốt, hàng sắp hết, nợ kho, giá, sao lưu, thuế',
+      ],
+      [
+        'Cảnh báo ngay',
+        'huỷ đơn đã thanh toán, giảm giá vượt mức có duyệt PIN, bán dưới giá vốn',
+        'notify_alerts',
+      ],
+      [
+        'Gửi',
+        'mỗi phút + ngay sau khi có tin; mất mạng → chờ, gửi lại trong 1 ngày; nhóm nhận báo cáo có thể khác nhóm nhận sao lưu',
+        'settings.telegram.reportChatId',
       ],
     ]),
   ].join('');

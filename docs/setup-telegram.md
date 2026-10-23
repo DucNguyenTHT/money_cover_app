@@ -1,8 +1,9 @@
-# Gửi bản sao lưu và chứng từ qua Telegram
+# Telegram: sao lưu, chứng từ, báo cáo & cảnh báo
 
 Mỗi bản sao lưu dữ liệu hằng đêm (file `.dump`) được bot Telegram gửi vào một cuộc trò chuyện của bạn.
 Miễn phí, không giới hạn số file, mỗi file tối đa **50 MB** (dữ liệu của quán thường vài trăm KB đến vài
-chục MB). Không cần tên miền hay Google duyệt như Google Drive.
+chục MB). Không cần tên miền hay Google duyệt như Google Drive. Cùng bot đó gửi **báo cáo chốt ngày, tin nhắc
+việc buổi sáng và cảnh báo** cho chủ quán (mục cuối).
 
 ## Thiết lập (khoảng 3 phút)
 
@@ -45,6 +46,21 @@ lệnh khôi phục ở `setup-store.md` (mục Khôi phục).
 **Khôi phục ảnh chứng từ** hiện số file thiếu → bấm **Lấy lại … file từ Telegram**: máy chủ tự tải lại các file đã
 gửi (mỗi file ≤ 20 MB, kiểm tra khớp bản gốc) và gắn lại vào chứng từ. Cần nhập **cùng mã bot** đã gửi file. File
 gửi trước khi có tính năng này, hoặc chưa từng gửi, thì lấy từ `backups\documents\` / `BACKUP_COPY_DIR`.
+
+## Báo cáo & cảnh báo
+
+Mục **Báo cáo & cảnh báo qua Telegram** (cùng trang Cài đặt, ngay dưới Telegram):
+
+- **Báo cáo khi chốt ngày**: mỗi lần thu ngân chốt ngày, bot gửi doanh thu, lãi gộp tạm tính, tiền theo hình thức và
+  tiền két lệch bao nhiêu.
+- **Tin nhắc việc buổi sáng** (chọn giờ, mặc định 8:00): ngày chưa chốt, hàng sắp hết, nợ kho, món đang lỗ, sao lưu
+  lỗi, ngưỡng doanh thu thuế. Bấm **Gửi thử tin “Việc cần chú ý”** để xem ngay.
+- **Cảnh báo ngay**: huỷ đơn đã thanh toán, giảm giá vượt mức (có ADMIN duyệt PIN), bán dưới giá vốn.
+
+Muốn người quản lý xem báo cáo mà **không** nhận file dữ liệu: tạo nhóm, thêm bot và người quản lý vào, gửi một tin
+trong nhóm → **Chọn nơi khác** → chọn nhóm đó. Bản sao lưu vẫn vào chat riêng của bạn.
+
+Máy chủ mất mạng thì tin chờ và tự gửi khi có mạng lại (quá 1 ngày thì bỏ); mục này hiện số tin đang chờ.
 
 ## Lưu ý
 

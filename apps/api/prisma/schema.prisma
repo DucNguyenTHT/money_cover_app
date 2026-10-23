@@ -139,6 +139,13 @@ enum TaxGroup {
   OTHER
 }
 
+/// DAILY = báo cáo khi chốt ngày, MORNING = tin nhắc việc buổi sáng, ALERT = cảnh báo ngay.
+enum NotifyKind {
+  DAILY
+  MORNING
+  ALERT
+}
+
 // ---------------------------------------------------------------- catalog & config
 
 /// Cơ sở
@@ -1139,6 +1146,24 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// Tin nhắn Telegram
+/// Báo cáo cuối ngày, tin nhắc việc buổi sáng và cảnh báo gửi chủ quán qua bot Telegram; chờ ở đây để gửi lại khi máy chủ mất mạng.
+/// Lưu: loại tin, nội dung, khoá chống gửi trùng, số lần thử, lỗi gần nhất, lúc gửi được.
+model TelegramMessage {
+  id        Int        @id @default(autoincrement())
+  kind      NotifyKind
+  text      String
+  /// Same key = same message (e.g. the morning digest of one day): queued only once.
+  dedupeKey String?    @unique @map("dedupe_key")
+  attempts  Int        @default(0)
+  lastError String?    @map("last_error")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  sentAt    DateTime?  @map("sent_at") @db.Timestamptz
+
+  @@index([sentAt, id])
+  @@map("telegram_messages")
 }
 
 /// Khoá sổ tháng

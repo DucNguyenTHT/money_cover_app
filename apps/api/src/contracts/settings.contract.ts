@@ -40,6 +40,16 @@ export const settingsSchema = z.object({
   backup_telegram: z.boolean(),
   /** Gửi thêm từng file chứng từ mới (ảnh / PDF / XML) qua Telegram mỗi lần sao lưu. */
   backup_telegram_documents: z.boolean(),
+  /** Telegram: báo cáo tổng kết mỗi lần chốt ngày. */
+  notify_daily: z.boolean(),
+  /** Telegram: tin nhắc việc buổi sáng (hàng sắp hết, ngày chưa chốt, cảnh báo giá…). */
+  notify_morning: z.boolean(),
+  /** Giờ (0–23) gửi tin buổi sáng. */
+  notify_morning_hour: z.coerce.number().int().min(0).max(23),
+  /** Telegram: cảnh báo ngay khi huỷ đơn đã thanh toán, giảm giá vượt mức, bán dưới giá vốn. */
+  notify_alerts: z.boolean(),
+  /** Chênh lệch tiền mặt khi chốt ngày từ mức này (đồng) thì báo cáo đánh dấu ⚠️. */
+  notify_cash_diff: z.coerce.number().int().min(0).max(100_000_000),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

@@ -75,6 +75,10 @@ export type SupplierPayMethod = (typeof SUPPLIER_PAY_METHODS)[number];
 export const TAX_REGIMES = values('HOUSEHOLD', 'DEDUCTION');
 export type TaxRegime = (typeof TAX_REGIMES)[number];
 
+/** Telegram messages to the owner: day-closing report, morning digest, instant alert. */
+export const NOTIFY_KINDS = values('DAILY', 'MORNING', 'ALERT');
+export type NotifyKind = (typeof NOTIFY_KINDS)[number];
+
 /** Price list used by each sales channel. */
 export const PRICE_TYPE_BY_CHANNEL: Record<Channel, PriceType> = {
   DINE_IN: 'STORE',

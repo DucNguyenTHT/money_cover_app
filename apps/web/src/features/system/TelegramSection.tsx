@@ -70,7 +70,8 @@ export function TelegramSection() {
       <h2 className="font-semibold text-ink-strong">Telegram</h2>
       <p className="mt-0.5 text-[13px] text-muted">
         Mỗi bản sao lưu dữ liệu được gửi vào một cuộc trò chuyện Telegram của bạn (miễn phí, mỗi file tối đa
-        50 MB). Mở Telegram trên điện thoại là thấy; khi cần khôi phục thì tải file về.
+        50 MB). Mở Telegram trên điện thoại là thấy; khi cần khôi phục thì tải file về. Cùng bot này gửi báo
+        cáo & cảnh báo (mục bên dưới).
       </p>
 
       {s && (

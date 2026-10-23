@@ -4,8 +4,9 @@ Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR, đơn app giao
 kiểm kê, tồn tối thiểu & gợi ý nhập hàng), nhà cung cấp & công nợ, sổ quỹ tiền mặt, nhân viên (ca làm, chấm công,
 bảng lương, tạm ứng), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá, lãi của size /
 topping), lãi lỗ tháng / quý / năm, khoá sổ, lưu trữ chứng từ (ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên
-Google Drive), thuế hộ kinh doanh (GTGT + TNCN tạm tính, so sánh 2 cách tính, báo cáo "Thuế phải nộp") và sao lưu dữ
-liệu tự động mỗi đêm (kèm bản trên Telegram / Google Drive; ảnh chứng từ lấy lại được từ Telegram).
+Google Drive), thuế hộ kinh doanh (GTGT + TNCN tạm tính, so sánh 2 cách tính, báo cáo "Thuế phải nộp"), sao lưu dữ
+liệu tự động mỗi đêm (kèm bản trên Telegram / Google Drive; ảnh chứng từ lấy lại được từ Telegram) và báo cáo chốt ngày,
+tin nhắc việc buổi sáng, cảnh báo gian lận gửi chủ quán qua Telegram.
 
 | App        | Nội dung                                                                                                                                                  |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |

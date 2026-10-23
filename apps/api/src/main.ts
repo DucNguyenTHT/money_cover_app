@@ -5,11 +5,14 @@ import { attachRealtime } from './core/realtime';
 import { logger } from './core/logger';
 import { prisma } from './core/db';
 import { startScheduler as startBackups } from './modules/backup/backup.service';
+import { startScheduler as startNotify } from './modules/notify/notify.service';
+import { morningDigest } from './modules/notify/digests';
 
 const server = createServer(createApp());
 attachRealtime(server);
 
 startBackups();
+startNotify(morningDigest);
 server.listen(env.PORT, () => logger.info(`API chạy tại http://localhost:${env.PORT} (tài liệu: /api/docs)`));
 
 const shutdown = async () => {

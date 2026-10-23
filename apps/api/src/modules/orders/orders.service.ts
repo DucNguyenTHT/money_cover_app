@@ -44,6 +44,8 @@ import {
   onIssueCostsChanged,
 } from '../inventory/stock-engine';
 import { billTicket, kitchenTicket, printTo } from './print';
+import * as owner from '../notify/notify.service';
+import { belowCostAlert, cancelPaidAlert, discountAlert } from '../../domain/notify/messages';
 
 type Approval = z.infer<typeof approvalSchema>;
 
@@ -358,6 +360,35 @@ async function discountApproval(
   return verifyApproverPin(tx, approval.approverId, approval.pin);
 }
 
+/** Tell the owner about a discount above the staff limit (not when an ADMIN gave it themselves). */
+async function alertDiscount(
+  tx: Tx,
+  user: AuthUser,
+  orderId: number,
+  approvedBy: number,
+  reason: string | null,
+) {
+  if (user.role === 'ADMIN' && approvedBy === user.id) return;
+  const o = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+  const approver = await tx.user.findUnique({ where: { id: approvedBy }, select: { fullName: true } });
+  await owner.enqueue(
+    tx,
+    'ALERT',
+    discountAlert({
+      code: o.code,
+      pct: discountPct({
+        subtotal: D(o.subtotal.toString()),
+        itemDiscountTotal: D(o.itemDiscountTotal.toString()),
+        orderDiscountAmount: D(o.orderDiscountAmount.toString()),
+      }),
+      amount: D(o.itemDiscountTotal.toString()).add(o.orderDiscountAmount.toString()),
+      reason,
+      by: user.fullName,
+      approvedBy: approver?.fullName ?? '',
+    }),
+  );
+}
+
 async function nextCode(tx: Tx, branchId: number, date: string) {
   const [row] = await tx.$queryRaw<{ last_no: number }[]>`
     INSERT INTO order_counters (branch_id, business_date, last_no) VALUES (${branchId}, ${toDbDate(date)}::date, 1)
@@ -605,7 +636,10 @@ export function updateItem(
     if (discountChanged) {
       await recompute(tx, id);
       const approvedBy = await discountApproval(tx, user, id, b.approval);
-      if (approvedBy) await tx.order.update({ where: { id }, data: { discountApprovedById: approvedBy } });
+      if (approvedBy) {
+        await tx.order.update({ where: { id }, data: { discountApprovedById: approvedBy } });
+        await alertDiscount(tx, user, id, approvedBy, b.discountReason?.trim() || null);
+      }
       await writeAudit(tx, {
         entity: 'order',
         entityId: id,
@@ -708,7 +742,10 @@ export function discount(
     });
     await recompute(tx, id);
     const approvedBy = clear ? null : await discountApproval(tx, user, id, b.approval);
-    if (approvedBy) await tx.order.update({ where: { id }, data: { discountApprovedById: approvedBy } });
+    if (approvedBy) {
+      await tx.order.update({ where: { id }, data: { discountApprovedById: approvedBy } });
+      await alertDiscount(tx, user, id, approvedBy, b.reason?.trim() || null);
+    }
     await writeAudit(tx, {
       entity: 'order',
       entityId: id,
@@ -1082,6 +1119,18 @@ export async function pay(user: AuthUser, id: number, b: z.infer<typeof payInput
     if (below && !b.belowCostReason) {
       throw conflict('BELOW_COST', 'Đơn đang bán dưới giá vốn — nhập lý do để tiếp tục thanh toán');
     }
+    if (below)
+      await owner.enqueue(
+        tx,
+        'ALERT',
+        belowCostAlert({
+          code: o.code,
+          netRevenue: fresh.netRevenue.toString(),
+          cost: cost.toString(),
+          reason: b.belowCostReason ?? null,
+          by: user.fullName,
+        }),
+      );
     await tx.orderPayment.createMany({
       data: checked.lines.map((p) => ({
         orderId: id,
@@ -1181,6 +1230,23 @@ export async function cancel(
       },
     });
     if (closing) await tx.dayClosing.update({ where: { id: closing.id }, data: { needsReclose: true } });
+    if (o.status === 'PAID') {
+      const approver = approvedBy
+        ? await tx.user.findUnique({ where: { id: approvedBy }, select: { fullName: true } })
+        : null;
+      await owner.enqueue(
+        tx,
+        'ALERT',
+        cancelPaidAlert({
+          code: o.code,
+          date,
+          total: o.total.toString(),
+          reason: b.reason,
+          by: user.fullName,
+          approvedBy: approver?.fullName ?? null,
+        }),
+      );
+    }
     await writeAudit(tx, {
       entity: 'order',
       entityId: id,

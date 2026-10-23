@@ -12,6 +12,11 @@ export const telegramStatus = z.object({
   chatTitle: z.string().nullable(),
   /** Bot and chat chosen: backups can be sent. */
   ready: z.boolean(),
+  /** Chat for reports and alerts when it is not the backup chat. */
+  reportChatId: z.string().nullable(),
+  reportChatTitle: z.string().nullable(),
+  /** Reports and alerts can be sent (own chat or the backup chat). */
+  reportReady: z.boolean(),
 });
 export type TelegramStatus = z.infer<typeof telegramStatus>;
 
@@ -62,6 +67,46 @@ export const telegramContract = c.router(
       metadata: admin,
       responses: { 200: telegramStatus, ...commonErrors },
       summary: 'Chọn nơi nhận bản sao lưu (gửi một tin thử)',
+    },
+    setReportChat: {
+      method: 'PUT',
+      path: '/api/telegram/report-chat',
+      body: z.object({
+        /** null = send reports and alerts to the backup chat. */
+        chatId: z
+          .string()
+          .regex(/^-?\d+$/)
+          .nullable(),
+        title: z.string().trim().min(1).max(200).nullable(),
+      }),
+      metadata: admin,
+      responses: { 200: telegramStatus, ...commonErrors },
+      summary: 'Chọn nơi nhận báo cáo & cảnh báo (gửi một tin thử)',
+    },
+    sendDigest: {
+      method: 'POST',
+      path: '/api/telegram/digest',
+      body: z.object({}),
+      metadata: admin,
+      responses: { 200: z.object({ text: z.string() }), ...commonErrors },
+      summary: 'Gửi ngay tin "Việc cần chú ý" (như tin buổi sáng) để xem thử',
+    },
+    queue: {
+      method: 'GET',
+      path: '/api/telegram/queue',
+      metadata: admin,
+      responses: {
+        200: z.object({
+          /** Messages waiting to be sent (no Internet, Telegram refused…). */
+          waiting: z.number(),
+          /** Older than a day and given up. */
+          dropped: z.number(),
+          lastError: z.string().nullable(),
+          lastSentAt: z.string().nullable(),
+        }),
+        ...commonErrors,
+      },
+      summary: 'Tình trạng gửi báo cáo & cảnh báo',
     },
     clear: {
       method: 'DELETE',

@@ -9,7 +9,10 @@ import type { DayClosingDto, DayPreview } from '../../contracts/orders.contract'
 import { fromDbDate, toDbDate } from '../../domain/business-date';
 import { PAYMENT_METHODS, type PaymentMethod } from '../../domain/enums';
 import { D, ZERO } from '../../domain/money';
+import { logger } from '../../core/logger';
 import { dayTotals } from '../cash/cash.service';
+import * as notify from '../notify/notify.service';
+import { dailyReport } from '../notify/digests';
 
 const emptyByMethod = () =>
   Object.fromEntries(PAYMENT_METHODS.map((m) => [m, '0'])) as Record<PaymentMethod, string>;
@@ -102,7 +105,19 @@ export async function close(user: AuthUser, date: string, countedCash: string, n
     });
     return saved;
   });
-  return toDto(row);
+  const dto = await toDto(row);
+  // The owner's report never stands in the way of closing the day.
+  try {
+    await notify.enqueue(
+      prisma,
+      'DAILY',
+      await dailyReport(p, dto, !!p.closing),
+      `DAILY:${date}:${row.closedAt.toISOString()}`,
+    );
+  } catch (e) {
+    logger.error(e, 'Không tạo được báo cáo chốt ngày');
+  }
+  return dto;
 }
 
 export async function list(month: string) {

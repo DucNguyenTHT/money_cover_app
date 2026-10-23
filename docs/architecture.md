@@ -12,6 +12,7 @@ máy tính bảng / máy thu ngân ── HTTPS (Caddy, CA nội bộ) ──┬
                                                           └── /socket.io/* → api (Socket.IO)
 api ── PostgreSQL 16          api ── TCP 9100 ── máy in nhiệt LAN
 api ── pg_dump 02:00 ──► backups/ ──(tuỳ chọn, Internet)──► Telegram bot · Google Drive của chủ quán
+api ── telegram_messages (hàng đợi) ──(Internet)──► Telegram: báo cáo chốt ngày, tin sáng, cảnh báo
 ```
 
 Monorepo pnpm + Turborepo, 2 app:
@@ -87,3 +88,7 @@ pnpm e2e -- onboarding
   một nơi lưu lịch sử giá; thứ tự chọn giá nằm ở `domain/pricing/price-list.ts`.
 - **Cấu hình nhạy cảm trong DB, mã hoá** (`core/secret-box.ts`): mã bot Telegram, Google Client secret, refresh token Drive nằm trong
   `settings` dưới khoá riêng, không thuộc schema cài đặt công khai nên không bao giờ trả ra trình duyệt.
+- **Tin cho chủ quán qua hàng đợi** (`modules/notify`): service ghi tin vào `telegram_messages` bằng chính `tx` của
+  thao tác (rollback thì không có tin), worker trong API gửi mỗi phút và ngay sau khi có tin; mất mạng thì tin chờ.
+  Nội dung tin là hàm thuần (`domain/notify/messages.ts`); số liệu lấy từ `modules/notify/digests.ts`. Tính năng
+  khác thêm dòng vào báo cáo qua `addDailyLines` / `addMorningLines`.
