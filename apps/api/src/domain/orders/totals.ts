@@ -11,6 +11,8 @@ export interface TotalsLine {
 export interface TotalsInput {
   lines: readonly TotalsLine[];
   orderDiscount?: { type: DiscountType; value: Num } | null;
+  /** Money off for loyalty points spent (after the order discount, capped at what is left). */
+  pointsDiscount?: Num;
   /** 0 when the order's channel has no service charge. */
   serviceChargePct: Num;
   vatPct: Num;
@@ -21,6 +23,7 @@ export interface Totals {
   subtotal: Decimal;
   itemDiscountTotal: Decimal;
   orderDiscountAmount: Decimal;
+  pointsDiscountAmount: Decimal;
   serviceChargeAmount: Decimal;
   /** Doanh thu thuần: after discounts, plus service charge, without VAT. */
   netRevenue: Decimal;
@@ -37,7 +40,7 @@ const vatInside = (gross: Decimal, vatPct: Decimal) =>
 
 /**
  * Order totals, rounded to whole đồng at every step:
- * subtotal − line discounts − order discount = sales; + service charge; + VAT (EXCLUSIVE) or VAT taken out (INCLUSIVE).
+ * subtotal − line discounts − order discount − points = sales; + service charge; + VAT (EXCLUSIVE) or VAT taken out (INCLUSIVE).
  */
 export function orderTotals(input: TotalsInput): Totals {
   const amounts = input.lines.map((l) => roundVnd(D(l.qty).mul(l.unitPrice)));
@@ -55,14 +58,20 @@ export function orderTotals(input: TotalsInput): Totals {
     orderDiscountAmount = Decimal.max(ZERO, Decimal.min(orderDiscountAmount, base));
   }
   const shares = allocateVnd(orderDiscountAmount, afterLine);
-  const sales = base.sub(orderDiscountAmount);
+  const afterOrder = afterLine.map((a, i) => a.sub(shares[i] ?? 0));
+  const pointsDiscountAmount = Decimal.max(
+    ZERO,
+    Decimal.min(roundVnd(input.pointsDiscount ?? 0), base.sub(orderDiscountAmount)),
+  );
+  const pointShares = allocateVnd(pointsDiscountAmount, afterOrder);
+  const sales = base.sub(orderDiscountAmount).sub(pointsDiscountAmount);
   const serviceChargeAmount = roundVnd(sales.mul(input.serviceChargePct).div(100));
   const vatPct = D(input.vatPct);
 
   let netRevenue: Decimal;
   let vatAmount: Decimal;
   let total: Decimal;
-  let netLines = afterLine.map((a, i) => a.sub(shares[i] ?? 0));
+  let netLines = afterOrder.map((a, i) => a.sub(pointShares[i] ?? 0));
   if (input.vatMode === 'INCLUSIVE') {
     total = sales.add(serviceChargeAmount);
     vatAmount = vatInside(total, vatPct);
@@ -80,6 +89,7 @@ export function orderTotals(input: TotalsInput): Totals {
     subtotal,
     itemDiscountTotal,
     orderDiscountAmount,
+    pointsDiscountAmount,
     serviceChargeAmount,
     netRevenue,
     vatAmount,

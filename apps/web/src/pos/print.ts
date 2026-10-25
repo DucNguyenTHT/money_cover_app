@@ -79,6 +79,7 @@ export async function billHtml(b: BillDto, provisional: boolean): Promise<string
     ${discount > 0 ? `<div class="row"><span>Giảm giá${o.discountReason ? ` (${esc(o.discountReason)})` : ''}</span><span>−${money(discount)}</span></div>` : ''}
     ${Number(o.serviceChargeAmount) > 0 ? `<div class="row"><span>Phụ thu ${Number(o.serviceChargePct)}%</span><span>${money(o.serviceChargeAmount)}</span></div>` : ''}
     ${Number(o.vatAmount) > 0 ? `<div class="row"><span>${o.vatMode === 'INCLUSIVE' ? 'Đã gồm' : ''} VAT ${Number(o.vatPct)}%</span><span>${money(o.vatAmount)}</span></div>` : ''}
+    ${Number(o.pointsDiscount) > 0 ? `<div class="row"><span>Đổi ${o.pointsRedeemed} điểm</span><span>−${money(o.pointsDiscount)}</span></div>` : ''}
     <div class="row big"><span>TỔNG</span><span>${money(o.total)}</span></div>
     ${o.payments
       .map(
@@ -86,6 +87,7 @@ export async function billHtml(b: BillDto, provisional: boolean): Promise<string
         ${p.method === 'CASH' && p.cashReceived ? `<div class="row s"><span>Khách đưa / tiền thối</span><span>${money(p.cashReceived)} / ${money(p.change)}</span></div>` : ''}`,
       )
       .join('')}
+    ${o.customer && !provisional ? `<hr><div class="c s">Khách: ${esc(o.customer.name)}${o.pointsEarned ? ` · tích thêm ${o.pointsEarned} điểm, còn ${o.customer.points} điểm` : ''}</div>` : ''}
     ${invoiceBlock}
     ${qr ? `<hr><div class="c s">Quét mã để chuyển khoản</div><div class="qr">${qr}</div><div class="c s">${esc(b.bankAccount ?? '')}</div>` : ''}
     <hr><div class="c s">${esc(b.footer)}</div>`;

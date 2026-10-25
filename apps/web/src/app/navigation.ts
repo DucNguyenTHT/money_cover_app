@@ -26,6 +26,7 @@ import {
   Store,
   Truck,
   UserCog,
+  UserRound,
   Users,
   Wallet,
   Warehouse,
@@ -162,6 +163,17 @@ export const NAV: NavModule[] = [
           { label: 'Danh sách đơn', icon: ShoppingCart, path: '/admin/orders' },
           { label: 'Chốt ngày', icon: Store, path: '/admin/orders/day-closings' },
         ],
+      },
+    ],
+  },
+  {
+    key: 'customers',
+    label: 'Khách hàng',
+    path: '/admin/customers',
+    groups: [
+      {
+        title: 'Khách hàng',
+        items: [{ label: 'Khách quen & điểm', icon: UserRound, path: '/admin/customers' }],
       },
     ],
   },

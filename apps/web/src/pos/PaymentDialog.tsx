@@ -10,7 +10,8 @@ import { money } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
-import { usePosSettings } from './data';
+import { posKeys, usePosSettings } from './data';
+import { useQueryClient } from '@tanstack/react-query';
 import { BuyerFields, emptyBuyer, useEInvoicePos } from '@/components/EInvoiceParts';
 import { billHtml, printHtml } from './print';
 
@@ -51,6 +52,9 @@ export function PaymentDialog({
   const [busy, setBusy] = useState(false);
   const [qrSvg, setQrSvg] = useState('');
   const einv = useEInvoicePos().data;
+  const qc = useQueryClient();
+  const [points, setPoints] = useState('');
+  const [pointsBusy, setPointsBusy] = useState(false);
   const [invoiceWanted, setInvoiceWanted] = useState(false);
   const [companyInvoice, setCompanyInvoice] = useState(false);
   const [buyer, setBuyer] = useState(emptyBuyer);
@@ -366,6 +370,53 @@ export function PaymentDialog({
               )}
             </div>
           )}
+          {order.customer && settings?.loyalty_enabled && (
+            <div className="flex flex-wrap items-end gap-2 rounded-ctl border border-line-soft p-3 text-[13px]">
+              <span className="flex-1">
+                <b>{order.customer.name}</b> có <b className="num">{money(order.customer.points)}</b> điểm
+                {order.pointsRedeemed > 0 && (
+                  <span className="block text-good">
+                    Đang dùng {order.pointsRedeemed} điểm = −{money(order.pointsDiscount)} ₫
+                  </span>
+                )}
+              </span>
+              <label className="flex w-28 flex-col gap-1 text-xs text-muted">
+                Dùng điểm
+                <input
+                  inputMode="numeric"
+                  value={points}
+                  placeholder={order.pointsRedeemed ? String(order.pointsRedeemed) : '0'}
+                  onChange={(e) => setPoints(e.target.value.replace(/\D/g, ''))}
+                  className="num h-9 rounded-ctl border border-field bg-white px-2 text-right text-sm text-ink"
+                />
+              </label>
+              <Button
+                size="sm"
+                loading={pointsBusy}
+                disabled={points === '' && !order.pointsRedeemed}
+                onClick={async () => {
+                  setPointsBusy(true);
+                  setError(null);
+                  try {
+                    const o = ok(
+                      await client.orders.redeemPoints({
+                        params: { id: order.id },
+                        body: { version: order.version, points: points === '' ? 0 : Number(points) },
+                      }),
+                    );
+                    qc.setQueryData(posKeys.order(o.id), o);
+                    setPoints('');
+                  } catch (e) {
+                    setError(errorMessage(e));
+                  } finally {
+                    setPointsBusy(false);
+                  }
+                }}
+              >
+                {points === '' && order.pointsRedeemed ? 'Bỏ dùng điểm' : 'Áp dụng'}
+              </Button>
+            </div>
+          )}
           <FormError message={error} />
           <button type="submit" hidden />
         </div>
@@ -377,6 +428,9 @@ export function PaymentDialog({
               label="Giảm giá"
               value={String(-(Number(order.itemDiscountTotal) + Number(order.orderDiscountAmount)))}
             />
+          )}
+          {Number(order.pointsDiscount) > 0 && (
+            <Row label={`Đổi ${order.pointsRedeemed} điểm`} value={String(-Number(order.pointsDiscount))} />
           )}
           {Number(order.serviceChargeAmount) > 0 && (
             <Row label={`Phụ thu ${Number(order.serviceChargePct)}%`} value={order.serviceChargeAmount} />

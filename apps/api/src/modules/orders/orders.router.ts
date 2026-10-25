@@ -28,8 +28,15 @@ export const ordersRouter = s.router(ordersContract, {
   },
   update: async ({ req, params, body }) => ({
     status: 200,
-    body: redactFor(currentUser(req).role, await orders.update(params.id, body)),
+    body: redactFor(currentUser(req).role, await orders.update(currentUser(req), params.id, body)),
   }),
+  redeemPoints: async ({ req, params, body }) => {
+    const u = currentUser(req);
+    return {
+      status: 200,
+      body: redactFor(u.role, await orders.redeemPoints(u, params.id, body.version, body.points)),
+    };
+  },
   addItems: async ({ req, params, body }) => ({
     status: 200,
     body: redactFor(currentUser(req).role, await orders.addItems(params.id, body.version, body.items)),

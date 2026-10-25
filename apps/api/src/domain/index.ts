@@ -21,3 +21,4 @@ export * from './inventory/reorder';
 export * from './cash/cashbook';
 export * from './suppliers/payables';
 export * from './staff/payroll';
+export * from './loyalty/points';

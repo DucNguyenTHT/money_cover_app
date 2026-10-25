@@ -97,6 +97,10 @@ export const EINVOICE_STATUSES = values('PENDING', 'SENDING', 'ISSUED', 'FAILED'
 export type EInvoiceStatus = (typeof EINVOICE_STATUSES)[number];
 
 /** ORIGINAL = the invoice of a sale; ADJUSTMENT = full decrease when an issued sale is cancelled. */
+/** Loyalty point movements: earned at payment, spent as money off, ADMIN adjustment, given back on cancel. */
+export const POINT_KINDS = values('EARN', 'REDEEM', 'ADJUST', 'REVERSE');
+export type PointKind = (typeof POINT_KINDS)[number];
+
 export const EINVOICE_KINDS = values('ORIGINAL', 'ADJUSTMENT');
 export type EInvoiceKind = (typeof EINVOICE_KINDS)[number];
 

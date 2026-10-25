@@ -10,6 +10,7 @@ import {
   StickyNote,
   Trash2,
   X,
+  UserRound,
 } from 'lucide-react';
 import type { OrderDto, OrderItemDto } from '@ketoan/api/contracts';
 import { optionsLabel } from '@ketoan/api/domain';
@@ -30,6 +31,7 @@ import {
   SplitDialog,
 } from './OrderDialogs';
 import { PaymentDialog } from './PaymentDialog';
+import { CustomerDialog } from './CustomerDialog';
 import { billHtml, kitchenHtml, printHtml } from './print';
 
 const STATE: Record<OrderItemDto['kitchenStatus'], { label: string; cls: string }> = {
@@ -39,7 +41,7 @@ const STATE: Record<OrderItemDto['kitchenStatus'], { label: string; cls: string 
   SERVED: { label: 'Đã ra món', cls: 'text-good' },
 };
 
-type Dlg = 'pay' | 'discount' | 'move' | 'split' | 'cancel' | 'info' | null;
+type Dlg = 'pay' | 'discount' | 'move' | 'split' | 'cancel' | 'info' | 'customer' | null;
 
 /** Right-hand order panel used on the table map and the menu screen. */
 export function OrderPanel({ onPaid, onClose }: { onPaid?: () => void; onClose?: () => void }) {
@@ -249,6 +251,16 @@ export function OrderPanel({ onPaid, onClose }: { onPaid?: () => void; onClose?:
           Đơn chỉ được tạo khi gọi món đầu tiên.
         </p>
       )}
+      {order?.customer && (
+        <button
+          onClick={() => setDlg('customer')}
+          className="flex shrink-0 items-center gap-2 border-b border-line bg-primary-soft/50 px-3.5 py-1.5 text-left text-[13px] hover:bg-primary-soft"
+        >
+          <UserRound size={14} className="text-primary-ink" />
+          <b>{order.customer.name}</b>
+          <span className="text-muted">· {money(order.customer.points)} điểm</span>
+        </button>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {q.isLoading && orderId ? (
@@ -361,6 +373,9 @@ export function OrderPanel({ onPaid, onClose }: { onPaid?: () => void; onClose?:
             <ToolButton icon={<BadgePercent size={16} />} onClick={() => setDlg('discount')}>
               Giảm giá
             </ToolButton>
+            <ToolButton icon={<UserRound size={16} />} onClick={() => setDlg('customer')}>
+              Khách quen
+            </ToolButton>
             <ToolButton icon={<ArrowLeftRight size={16} />} onClick={() => setDlg('move')}>
               Chuyển / gộp
             </ToolButton>
@@ -463,6 +478,12 @@ export function OrderPanel({ onPaid, onClose }: { onPaid?: () => void; onClose?:
           <OrderInfoDialog
             order={order}
             open={dlg === 'info'}
+            onClose={() => setDlg(null)}
+            onDone={(o) => (setOrder(o), setDlg(null))}
+          />
+          <CustomerDialog
+            order={order}
+            open={dlg === 'customer'}
             onClose={() => setDlg(null)}
             onDone={(o) => (setOrder(o), setDlg(null))}
           />

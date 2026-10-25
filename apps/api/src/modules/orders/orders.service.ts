@@ -46,6 +46,8 @@ import {
 import { billTicket, kitchenTicket, printTo } from './print';
 import * as owner from '../notify/notify.service';
 import * as einvoice from '../einvoice/einvoice.service';
+import * as customers from '../customers/customers.service';
+import { earnedPoints, pointsValue, redeemProblem } from '../../domain/loyalty/points';
 import { belowCostAlert, cancelPaidAlert, discountAlert } from '../../domain/notify/messages';
 
 type Approval = z.infer<typeof approvalSchema>;
@@ -61,6 +63,7 @@ const include = {
   // Money matched on the bank account (bank feed); ignored transactions are never tied to an order.
   bankTransactions: { where: { ignoredAt: null }, select: { amount: true } },
   einvoices: { orderBy: { id: 'asc' } },
+  customer: true,
 } as const;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof include }>;
 
@@ -154,6 +157,12 @@ function toDto(o: OrderRow, names: Map<number, string>): OrderDto {
     })),
     transferReceived: o.bankTransactions.reduce((sum, t) => sum.add(t.amount.toString()), ZERO).toString(),
     einvoice: einvoice.orderInvoice(o.einvoices),
+    customer: o.customer
+      ? { id: o.customer.id, name: o.customer.name, phone: o.customer.phone, points: o.customer.points }
+      : null,
+    pointsRedeemed: o.pointsRedeemed,
+    pointsDiscount: o.pointsDiscount.toString(),
+    pointsEarned: o.pointsEarned,
   };
 }
 
@@ -305,10 +314,16 @@ async function recompute(tx: Tx, orderId: number): Promise<void> {
     orderDiscount: o.orderDiscountType
       ? { type: o.orderDiscountType, value: o.orderDiscountValue?.toString() ?? 0 }
       : null,
+    pointsDiscount: o.pointsDiscount.toString(),
     serviceChargePct: o.serviceChargePct.toString(),
     vatPct: o.vatPct.toString(),
     vatMode: o.vatMode,
   });
+  // Dishes removed after spending points: the points no longer fit — the redemption is dropped (spend again).
+  if (t.pointsDiscountAmount.lt(o.pointsDiscount.toString())) {
+    await tx.order.update({ where: { id: orderId }, data: { pointsRedeemed: 0, pointsDiscount: 0 } });
+    return recompute(tx, orderId);
+  }
   for (const [k, i] of active.entries()) {
     const l = t.lines[k]!;
     if (!i.amount.equals(l.amount.toString()) || !i.netAmount.equals(l.netAmount.toString())) {
@@ -562,17 +577,74 @@ async function mutate(id: number, version: number | null, fn: (tx: Tx, o: OrderR
 }
 
 export const update = (
+  user: AuthUser,
   id: number,
-  b: { version: number; guestCount?: number; note?: string | null; appOrderCode?: string | null },
+  b: {
+    version: number;
+    guestCount?: number;
+    note?: string | null;
+    appOrderCode?: string | null;
+    customerId?: number | null;
+  },
 ) =>
-  mutate(id, b.version, async (tx) => {
+  mutate(id, b.version, async (tx, o) => {
+    let customer = {};
+    if (b.customerId !== undefined && b.customerId !== o.customerId) {
+      if (b.customerId !== null) {
+        const c = await tx.customer.findUnique({ where: { id: b.customerId } });
+        if (!c || !c.active) throw badRequest('Khách hàng không tồn tại');
+      }
+      // Points spent belong to the customer: another customer (or none) starts again.
+      customer = { customerId: b.customerId, pointsRedeemed: 0, pointsDiscount: 0 };
+      await writeAudit(tx, {
+        entity: 'order',
+        entityId: id,
+        action: 'SET_CUSTOMER',
+        before: { customerId: o.customerId },
+        after: { customerId: b.customerId },
+        userId: user.id,
+      });
+    }
     await tx.order.update({
       where: { id },
       data: {
         ...(b.guestCount !== undefined ? { guestCount: b.guestCount } : {}),
         ...(b.note !== undefined ? { note: b.note || null } : {}),
         ...(b.appOrderCode !== undefined ? { appOrderCode: b.appOrderCode || null } : {}),
+        ...customer,
       },
+    });
+  });
+
+/** Spend a regular customer's points as money off the open order (0 = none). Deducted when the order is paid. */
+export const redeemPoints = (user: AuthUser, id: number, version: number, points: number) =>
+  mutate(id, version, async (tx, o) => {
+    const s = await getSettings(tx);
+    if (points > 0) {
+      if (!s.loyalty_enabled) throw badRequest('Chưa bật tích điểm khách quen (Cài đặt)');
+      if (!o.customer) throw badRequest('Chọn khách quen cho đơn trước');
+      const base = D(o.subtotal.toString())
+        .sub(o.itemDiscountTotal.toString())
+        .sub(o.orderDiscountAmount.toString());
+      const problem = redeemProblem(points, o.customer.points, base, {
+        earnVnd: s.loyalty_earn_vnd,
+        pointValue: s.loyalty_point_value,
+        minRedeem: s.loyalty_min_redeem,
+        maxRedeemPct: s.loyalty_max_redeem_pct,
+      });
+      if (problem) throw badRequest(problem);
+    }
+    await tx.order.update({
+      where: { id },
+      data: { pointsRedeemed: points, pointsDiscount: pointsValue(points, s.loyalty_point_value).toString() },
+    });
+    await writeAudit(tx, {
+      entity: 'order',
+      entityId: id,
+      action: 'REDEEM_POINTS',
+      before: { points: o.pointsRedeemed },
+      after: { points },
+      userId: user.id,
     });
   });
 
@@ -843,7 +915,13 @@ export async function merge(user: AuthUser, id: number, version: number, targetO
     await tx.orderItem.updateMany({ where: { orderId: src.id }, data: { orderId: dst.id } });
     // A transfer already received for the merged order now pays the target.
     await tx.bankTransaction.updateMany({ where: { orderId: src.id }, data: { orderId: dst.id } });
-    await tx.order.update({ where: { id: dst.id }, data: { guestCount: dst.guestCount + src.guestCount } });
+    await tx.order.update({
+      where: { id: dst.id },
+      data: {
+        guestCount: dst.guestCount + src.guestCount,
+        ...(dst.customerId === null && src.customerId !== null ? { customerId: src.customerId } : {}),
+      },
+    });
     await tx.order.update({
       where: { id: src.id },
       data: {
@@ -1154,6 +1232,7 @@ export async function pay(user: AuthUser, id: number, b: z.infer<typeof payInput
       where: { id },
       data: { status: 'PAID', paidById: user.id, paidAt: new Date(), version: { increment: 1 } },
     });
+    if (o.customerId) await settlePointsTx(tx, id, o.customerId, user.id);
     await writeAudit(tx, {
       entity: 'order',
       entityId: id,
@@ -1182,6 +1261,57 @@ export async function pay(user: AuthUser, id: number, b: z.infer<typeof payInput
     printed = r.printed && !r.warnings.length;
   }
   return { order, printed, printWarnings };
+}
+
+/** At payment: take the points spent, add the points earned, count the visit. */
+async function settlePointsTx(tx: Tx, orderId: number, customerId: number, userId: number) {
+  const o = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+  const s = await getSettings(tx);
+  const balance = await customers.lockBalance(tx, customerId);
+  if (o.pointsRedeemed > 0) {
+    if (balance < o.pointsRedeemed)
+      throw conflict('POINTS_CHANGED', `Khách chỉ còn ${balance} điểm — đổi lại điểm rồi thanh toán`);
+    await customers.addPointsTx(tx, customerId, 'REDEEM', -o.pointsRedeemed, {
+      orderId,
+      note: `Đổi điểm đơn ${o.code}`,
+      userId,
+    });
+  }
+  const earned = s.loyalty_enabled ? earnedPoints(o.netRevenue.toString(), s.loyalty_earn_vnd) : 0;
+  if (earned)
+    await customers.addPointsTx(tx, customerId, 'EARN', earned, { orderId, note: `Đơn ${o.code}`, userId });
+  await tx.order.update({ where: { id: orderId }, data: { pointsEarned: earned } });
+  await tx.customer.update({
+    where: { id: customerId },
+    data: { visits: { increment: 1 }, totalSpent: { increment: o.total }, lastVisitAt: new Date() },
+  });
+}
+
+/** A paid order cancelled: its points go back the other way, the visit no longer counts. */
+async function reversePointsTx(
+  tx: Tx,
+  o: {
+    id: number;
+    code: string;
+    customerId: number | null;
+    pointsEarned: number;
+    pointsRedeemed: number;
+    total: Prisma.Decimal;
+  },
+  userId: number,
+) {
+  const c = o.customerId!;
+  const back = o.pointsRedeemed - o.pointsEarned;
+  if (back)
+    await customers.addPointsTx(tx, c, 'REVERSE', back, { orderId: o.id, note: `Huỷ đơn ${o.code}`, userId });
+  const cur = await tx.customer.findUniqueOrThrow({ where: { id: c } });
+  await tx.customer.update({
+    where: { id: c },
+    data: {
+      visits: Math.max(0, cur.visits - 1),
+      totalSpent: Decimal.max(ZERO, D(cur.totalSpent.toString()).sub(o.total.toString())).toString(),
+    },
+  });
 }
 
 // ---------------------------------------------------------------- cancel / duplicate
@@ -1248,6 +1378,7 @@ export async function cancel(
     });
     if (closing) await tx.dayClosing.update({ where: { id: closing.id }, data: { needsReclose: true } });
     if (o.status === 'PAID') await einvoice.onOrderCancelledTx(tx, id, user.id);
+    if (o.status === 'PAID' && o.customerId) await reversePointsTx(tx, o, user.id);
     if (o.status === 'PAID') {
       const approver = approvedBy
         ? await tx.user.findUnique({ where: { id: approvedBy }, select: { fullName: true } })

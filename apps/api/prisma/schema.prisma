@@ -178,6 +178,14 @@ enum EInvoiceStatus {
   CANCELLED
 }
 
+/// EARN = tích khi thanh toán, REDEEM = đổi điểm trừ tiền, ADJUST = ADMIN chỉnh tay, REVERSE = hoàn khi huỷ đơn.
+enum PointKind {
+  EARN
+  REDEEM
+  ADJUST
+  REVERSE
+}
+
 /// ORIGINAL = hoá đơn của đơn bán; ADJUSTMENT = hoá đơn điều chỉnh giảm toàn bộ khi đơn đã phát hành bị huỷ.
 enum EInvoiceKind {
   ORIGINAL
@@ -570,6 +578,13 @@ model Order {
   cancelledAt          DateTime?     @map("cancelled_at") @db.Timestamptz
   cancelKind           CancelKind?   @map("cancel_kind")
   cancelReason         String?       @map("cancel_reason")
+  /// Khách quen của đơn (tích / đổi điểm).
+  customerId           Int?          @map("customer_id")
+  /// Điểm khách đổi lấy tiền trên đơn này và số tiền được trừ (trừ sau giảm giá đơn, trước phụ thu / VAT).
+  pointsRedeemed       Int           @default(0) @map("points_redeemed")
+  pointsDiscount       Decimal       @default(0) @map("points_discount") @db.Decimal(16, 2)
+  /// Điểm tích được khi thanh toán (để hoàn khi huỷ, in trên bill).
+  pointsEarned         Int           @default(0) @map("points_earned")
 
   table            DiningTable?      @relation(fields: [tableId], references: [id])
   deliveryApp      DeliveryApp?      @relation(fields: [deliveryAppId], references: [id])
@@ -578,6 +593,7 @@ model Order {
   issues           Issue[]
   bankTransactions BankTransaction[]
   einvoices        EInvoice[]
+  customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([businessDate, status])
   @@index([tableId, status])
@@ -700,6 +716,51 @@ model DayClosing {
 
   @@unique([branchId, businessDate])
   @@map("day_closings")
+}
+
+/// Khách quen
+/// Khách hàng nhận diện bằng số điện thoại: tích điểm khi mua, đổi điểm trừ tiền, xem lịch sử ghé quán.
+/// Lưu: số điện thoại, tên, ngày sinh, ghi chú, điểm hiện có, số lần ghé, tổng chi tiêu, lần ghé gần nhất, đang dùng.
+model Customer {
+  id          Int       @id @default(autoincrement())
+  branchId    Int       @map("branch_id")
+  /// Digits only, 0xxxxxxxxx (normalised from +84).
+  phone       String    @unique
+  name        String
+  birthday    DateTime? @db.Date
+  note        String?
+  /// Balance = Σ point entries (kept here for quick reads).
+  points      Int       @default(0)
+  visits      Int       @default(0)
+  totalSpent  Decimal   @default(0) @map("total_spent") @db.Decimal(16, 2)
+  lastVisitAt DateTime? @map("last_visit_at") @db.Timestamptz
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  orders       Order[]
+  pointEntries PointEntry[]
+
+  @@index([name])
+  @@map("customers")
+}
+
+/// Lịch sử điểm
+/// Mỗi lần điểm của khách thay đổi: tích, đổi, hoàn khi huỷ đơn, ADMIN chỉnh (có lý do).
+/// Lưu: khách, đơn liên quan, loại, số điểm (+ / −), ghi chú, người làm.
+model PointEntry {
+  id          Int       @id @default(autoincrement())
+  customerId  Int       @map("customer_id")
+  orderId     Int?      @map("order_id")
+  kind        PointKind
+  points      Int
+  note        String?
+  createdById Int?      @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@map("point_entries")
 }
 
 /// Tiền chuyển khoản về

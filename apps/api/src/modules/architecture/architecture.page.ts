@@ -410,6 +410,11 @@ function flowsSection() {
         'option_groups · options · order_item_options · order_item_extras',
       ],
       ['Gửi bếp', 'in phiếu ESC/POS theo trạm, màn bếp nhận realtime', 'kitchen_status · printers'],
+      [
+        'Khách quen',
+        'gắn khách theo số điện thoại; đổi điểm = giảm tiền (trừ lúc thanh toán); tích điểm theo doanh thu thuần; huỷ đơn hoàn điểm',
+        'customers · point_entries · orders.customer_id',
+      ],
       ['Thanh toán', 'nhiều phương thức, VietQR, giảm giá cần PIN khi vượt mức', 'order_payments'],
       [
         'Tiền chuyển khoản về',

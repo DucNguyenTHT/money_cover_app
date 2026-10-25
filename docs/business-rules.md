@@ -12,7 +12,7 @@ Các công thức nằm trong `apps/api/src/domain` (có unit test). Tài liệu
 | Bước             | Quy tắc                                                                                                                                                                               |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Giá              | Theo kênh và ngày kinh doanh của đơn: tại quán / mang về dùng giá `STORE`; đơn app dùng giá riêng của app đó → giá app chung → giá tại quán. Nhân viên không sửa giá, chỉ giảm giá    |
-| Tổng tiền        | tạm tính − giảm giá món − giảm giá đơn = doanh số → + phụ thu (chỉ kênh được cài) → + VAT (`EXCLUSIVE`) hoặc tách VAT ra khỏi giá (`INCLUSIVE`)                                       |
+| Tổng tiền        | tạm tính − giảm giá món − giảm giá đơn − đổi điểm = doanh số → + phụ thu (chỉ kênh được cài) → + VAT (`EXCLUSIVE`) hoặc tách VAT ra khỏi giá (`INCLUSIVE`)                            |
 | Doanh thu thuần  | doanh số + phụ thu, **không gồm VAT** (VAT là tiền thu hộ, báo riêng)                                                                                                                 |
 | Giảm giá         | Bắt lý do. Vượt `max_discount_pct` cần ADMIN nhập PIN; lưu người duyệt                                                                                                                |
 | Gửi bếp          | Món mới chia theo trạm của nhóm món (Bếp / Bar). Món đã gửi chỉ **huỷ** được (có lý do, hỏi đã chế biến chưa)                                                                         |
@@ -100,6 +100,22 @@ Bật ở Cài đặt › Hoá đơn điện tử (Giả lập để thử, ho�
   nền. Mất mạng → thử lại sau 1, 5, 15, 60 phút; quá 3 ngày → _bị từ chối_. Nhà cung cấp từ chối → cảnh báo, gửi lại với mã mới.
 - **Huỷ đơn:** hoá đơn chưa gửi → huỷ; đã phát hành → hoá đơn **điều chỉnh giảm toàn bộ** (số tiền âm), tự gửi khi hoá đơn gốc đã phát hành.
 - Hộ kinh doanh: hoá đơn bán hàng, không ghi thuế suất. Công ty: thuế suất của đơn, tiền thuế chia theo dòng đúng đến đồng.
+
+## Khách quen & tích điểm
+
+- Khách nhận theo **số điện thoại** (một số một khách; lưu dạng 0xxxxxxxxx, nhập +84 / có dấu cách đều được). Tìm theo
+  một phần số hoặc tên không dấu. Gắn khách vào đơn ở màn bán hàng (_Khách quen_), thêm khách mới ngay tại đó.
+- Bật ở Cài đặt › Khách quen & tích điểm. **Tích điểm** khi thanh toán: doanh thu thuần ÷ `loyalty_earn_vnd` (làm tròn
+  xuống, mặc định 10.000 ₫ = 1 điểm). Tắt tích điểm vẫn đếm lần ghé và tiền đã chi.
+- **Đổi điểm** = giảm tiền trên đơn: điểm × `loyalty_point_value` (mặc định 500 ₫), tối thiểu `loyalty_min_redeem` điểm,
+  tối đa `loyalty_max_redeem_pct`% số tiền sau giảm giá. Tính sau giảm giá đơn, trước phụ thu / VAT; chia vào các dòng
+  như giảm giá đơn → doanh thu thuần, lãi theo món, lãi lỗ đều đã trừ. Báo cáo gộp vào _giảm giá_; không tính vào giới
+  hạn giảm giá của nhân viên.
+- Điểm chỉ bị trừ **lúc thanh toán** (khoá số dư, không đủ → 409). Bớt món làm phần đổi điểm vượt mức → bỏ đổi điểm, đổi
+  lại. Đổi khách của đơn → bỏ đổi điểm. Gộp đơn: đơn đích chưa có khách thì nhận khách của đơn nguồn.
+- **Huỷ đơn đã trả:** hoàn điểm đã đổi, trừ điểm đã tích, bớt một lần ghé và tiền đã chi. Số dư có thể âm nếu khách đã
+  tiêu điểm của đơn bị huỷ.
+- Mỗi lần cộng / trừ là một dòng lịch sử (tích, đổi, hoàn khi huỷ, chỉnh tay). ADMIN cộng / trừ tay có lý do.
 
 ## Nhà cung cấp & công nợ
 
@@ -212,6 +228,8 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 | Tiền chuyển khoản: nối dịch vụ, bỏ gán, bỏ qua                | ✓     |                                 |               |
 | Hoá đơn điện tử: xuất cho đơn, gửi lại                        | ✓     | ✓                               |               |
 | Hoá đơn điện tử: chọn nhà cung cấp, xem danh sách             | ✓     |                                 |               |
+| Khách quen: thêm / sửa, gắn vào đơn, đổi điểm                 | ✓     | ✓                               |               |
+| Khách quen: cộng / trừ điểm tay                               | ✓     |                                 |               |
 | Nhân viên, chấm công, bảng lương, tạm ứng                     | ✓     |                                 |               |
 | Tự vào ca / ra ca (tài khoản gắn với nhân viên)               | ✓     | ✓                               | ✓             |
 | Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ  | ✓     |                                 |               |

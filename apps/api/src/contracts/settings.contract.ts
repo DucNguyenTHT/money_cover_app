@@ -50,6 +50,16 @@ export const settingsSchema = z.object({
   notify_alerts: z.boolean(),
   /** Chênh lệch tiền mặt khi chốt ngày từ mức này (đồng) thì báo cáo đánh dấu ⚠️. */
   notify_cash_diff: z.coerce.number().int().min(0).max(100_000_000),
+  /** Khách quen: tích điểm khi thanh toán, đổi điểm trừ tiền. */
+  loyalty_enabled: z.boolean(),
+  /** Bao nhiêu đồng doanh thu thuần được 1 điểm. */
+  loyalty_earn_vnd: z.coerce.number().int().min(0).max(10_000_000),
+  /** 1 điểm đổi được bao nhiêu đồng. */
+  loyalty_point_value: z.coerce.number().int().min(0).max(1_000_000),
+  /** Đổi tối thiểu bao nhiêu điểm một lần. */
+  loyalty_min_redeem: z.coerce.number().int().min(0).max(1_000_000),
+  /** Điểm trả tối đa bao nhiêu % giá trị đơn (sau giảm giá). */
+  loyalty_max_redeem_pct: pct(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

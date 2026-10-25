@@ -31,4 +31,9 @@ export const DEFAULT_SETTINGS: Settings = {
   notify_morning_hour: 8,
   notify_alerts: true,
   notify_cash_diff: 20_000,
+  loyalty_enabled: false,
+  loyalty_earn_vnd: 10_000,
+  loyalty_point_value: 500,
+  loyalty_min_redeem: 20,
+  loyalty_max_redeem_pct: 50,
 };

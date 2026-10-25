@@ -32,6 +32,7 @@ const pairs: [string, readonly string[], Record<string, string>][] = [
   ['EInvoiceProvider', D.EINVOICE_PROVIDERS, Prisma.EInvoiceProvider],
   ['EInvoiceStatus', D.EINVOICE_STATUSES, Prisma.EInvoiceStatus],
   ['EInvoiceKind', D.EINVOICE_KINDS, Prisma.EInvoiceKind],
+  ['PointKind', D.POINT_KINDS, Prisma.PointKind],
 ];
 
 describe('enum sync', () => {

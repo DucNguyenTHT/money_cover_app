@@ -117,6 +117,8 @@ export function billTicket(b: BillDto, paperWidth: number, provisional: boolean)
   parts.push(line, row('Tong tien hang', vnd(o.subtotal)));
   const disc = Number(o.itemDiscountTotal) + Number(o.orderDiscountAmount);
   if (disc > 0) parts.push(row('Giam gia', `-${vnd(disc)}`));
+  if (Number(o.pointsDiscount) > 0)
+    parts.push(row(`Doi ${o.pointsRedeemed} diem`, `-${vnd(o.pointsDiscount)}`));
   if (Number(o.serviceChargeAmount) > 0)
     parts.push(row(`Phu thu ${Number(o.serviceChargePct)}%`, vnd(o.serviceChargeAmount)));
   if (Number(o.vatAmount) > 0) {
@@ -140,6 +142,13 @@ export function billTicket(b: BillDto, paperWidth: number, provisional: boolean)
     if (p.method === 'CASH' && p.cashReceived)
       parts.push(row('  Khach dua', vnd(p.cashReceived)), row('  Tien thoi', vnd(p.change ?? 0)));
   }
+  if (o.customer && !provisional)
+    parts.push(
+      escpos.text(`Khach: ${o.customer.name}`),
+      ...(o.pointsEarned
+        ? [escpos.text(`Tich them ${o.pointsEarned} diem - con ${o.customer.points} diem`)]
+        : []),
+    );
   // E-invoice (hoá đơn khởi tạo từ máy tính tiền): number and where the customer looks it up.
   const inv = o.einvoice;
   if (

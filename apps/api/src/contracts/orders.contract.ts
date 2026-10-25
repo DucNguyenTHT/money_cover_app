@@ -113,6 +113,11 @@ export const orderSchema = z.object({
   transferReceived: decimalString,
   /** E-invoice of the sale (null = none). */
   einvoice: orderEInvoiceSchema.nullable(),
+  /** Regular customer of the order (points). */
+  customer: z.object({ id: z.number(), name: z.string(), phone: z.string(), points: z.number() }).nullable(),
+  pointsRedeemed: z.number(),
+  pointsDiscount: decimalString,
+  pointsEarned: z.number(),
 });
 export type OrderDto = z.infer<typeof orderSchema>;
 
@@ -268,9 +273,20 @@ export const ordersContract = c.router(
         guestCount: z.number().int().min(1).max(200).optional(),
         note: z.string().trim().max(200).nullable().optional(),
         appOrderCode: z.string().trim().max(40).nullable().optional(),
+        /** Regular customer (null = none). */
+        customerId: z.number().int().nullable().optional(),
       }),
       responses: { 200: orderSchema, ...commonErrors },
       metadata: sellers,
+    },
+    redeemPoints: {
+      method: 'POST',
+      path: '/api/orders/:id/points',
+      pathParams: id,
+      body: z.object({ version, points: z.number().int().min(0) }),
+      responses: { 200: orderSchema, ...commonErrors },
+      metadata: sellers,
+      summary: 'Đổi điểm của khách quen lấy tiền trên đơn (0 = bỏ)',
     },
     addItems: {
       method: 'POST',

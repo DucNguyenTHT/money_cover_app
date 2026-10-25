@@ -154,6 +154,75 @@ export function SettingsPage() {
         </Section>
 
         <Section
+          title="Khách quen & tích điểm"
+          hint="Gắn khách vào đơn ở màn bán hàng (nút Khách quen). Điểm cộng khi thanh toán, tính trên doanh thu đã trừ giảm giá; đổi điểm = giảm tiền trên đơn."
+        >
+          <div className="sm:col-span-2 lg:col-span-3">
+            <Switch
+              checked={s.loyalty_enabled}
+              onChange={(v) => setS({ ...s, loyalty_enabled: v })}
+              label="Bật tích điểm"
+              description="Tắt thì vẫn lưu khách, số lần ghé và tiền đã chi, nhưng không cộng và không đổi điểm."
+            />
+          </div>
+          {s.loyalty_enabled && (
+            <>
+              <Field label="Số tiền để được 1 điểm (₫)">
+                {(id) => (
+                  <Input
+                    id={id}
+                    inputMode="numeric"
+                    className="num text-right"
+                    {...num('loyalty_earn_vnd')}
+                  />
+                )}
+              </Field>
+              <Field label="1 điểm đổi được (₫)">
+                {(id) => (
+                  <Input
+                    id={id}
+                    inputMode="numeric"
+                    className="num text-right"
+                    {...num('loyalty_point_value')}
+                  />
+                )}
+              </Field>
+              <Field label="Đổi tối thiểu (điểm)">
+                {(id) => (
+                  <Input
+                    id={id}
+                    inputMode="numeric"
+                    className="num text-right"
+                    {...num('loyalty_min_redeem')}
+                  />
+                )}
+              </Field>
+              <Field label="Đổi tối đa (% tiền đơn)">
+                {(id) => (
+                  <Input
+                    id={id}
+                    inputMode="decimal"
+                    className="num text-right"
+                    {...num('loyalty_max_redeem_pct')}
+                  />
+                )}
+              </Field>
+              <p className="text-xs text-faint sm:col-span-2 lg:col-span-3">
+                VD: đơn 200.000 ₫ được {Math.floor(200000 / (Number(s.loyalty_earn_vnd) || 1))} điểm, tức
+                khách được lại{' '}
+                {Math.round(
+                  (Math.floor(200000 / (Number(s.loyalty_earn_vnd) || 1)) *
+                    Number(s.loyalty_point_value) *
+                    100) /
+                    200000,
+                )}
+                % khi đổi điểm.
+              </p>
+            </>
+          )}
+        </Section>
+
+        <Section
           title="Thuế & phụ thu"
           hint="Chọn đúng loại hình đăng ký với cơ quan thuế. Phụ thu (phí phục vụ) tính vào doanh thu."
         >
