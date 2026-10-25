@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { Banknote, CreditCard, Landmark, Plus, Smartphone, Trash2 } from 'lucide-react';
+import { Banknote, CheckCircle2, CreditCard, Landmark, Plus, Smartphone, Trash2 } from 'lucide-react';
 import type { OrderDto } from '@ketoan/api/contracts';
 import { cashSuggestions, vietQrConfigured, vietQrPayload, type PaymentMethod } from '@ketoan/api/domain';
 import { Dialog } from '@/components/ui/Dialog';
-import { Button, IconButton } from '@/components/ui/Button';
+import { Button, IconButton, Spinner } from '@/components/ui/Button';
 import { client, errorMessage, HttpError, ok } from '@/lib/api-client';
 import { money } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -52,9 +52,24 @@ export function PaymentDialog({
 
   useEffect(() => {
     if (!open) return;
-    setLines([{ method: order.channel === 'APP' ? 'APP' : 'CASH', amount: String(total), cashReceived: '' }]);
+    // Money already on the bank account for this order (the customer scanned the printed bill): start from it.
+    const got = Math.min(Number(order.transferReceived), total);
+    setLines(
+      order.channel === 'APP'
+        ? [{ method: 'APP', amount: String(total), cashReceived: '' }]
+        : got >= total
+          ? [{ method: 'TRANSFER', amount: String(total), cashReceived: '' }]
+          : got > 0
+            ? [
+                { method: 'TRANSFER', amount: String(got), cashReceived: '' },
+                { method: 'CASH', amount: String(total - got), cashReceived: '' },
+              ]
+            : [{ method: 'CASH', amount: String(total), cashReceived: '' }],
+    );
     setBelowCost(null);
     setError(null);
+    // Only when the dialog opens (not each time money arrives while it is open).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order.id, order.channel, total]);
 
   const paid = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
@@ -85,6 +100,37 @@ export function PaymentDialog({
       setQrSvg(''),
     );
   }, [qrPayload]);
+
+  // Bank feed: while the QR is shown, the server reads the bank more often and pushes the order when money
+  // arrives (order.transferReceived then grows).
+  const [feed, setFeed] = useState(false);
+  const transferAmount = transfer && Number(transfer.amount) > 0 ? transfer.amount : null;
+  useEffect(() => {
+    if (!open || !transferAmount) return;
+    let alive = true;
+    const ping = () =>
+      client.bank
+        .watch({ body: { orderId: order.id, amount: transferAmount } })
+        .then((r) => alive && r.status === 200 && setFeed(r.body.enabled))
+        .catch(() => undefined);
+    void ping();
+    const t = setInterval(ping, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      client.bank.watch({ body: { orderId: order.id, amount: null } }).catch(() => undefined);
+    };
+  }, [open, order.id, transferAmount]);
+  const received = Number(order.transferReceived);
+  const arrived = feed && !!transferAmount && received >= Number(transferAmount);
+  const announced = useRef(false);
+  useEffect(() => {
+    if (!open) announced.current = false;
+    else if (arrived && !announced.current) {
+      announced.current = true;
+      toast(`Đã nhận ${money(received)} ₫ chuyển khoản — bấm Xác nhận thanh toán`);
+    }
+  }, [open, arrived, received, toast]);
 
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l)));
@@ -309,6 +355,31 @@ export function PaymentDialog({
                   <div className="size-44 [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: qrSvg }} />
                   <span className="num font-semibold">{money(transfer.amount)} ₫</span>
                   <span className="text-xs text-muted">Nội dung: {order.code}</span>
+                  {feed && (
+                    <span
+                      role="status"
+                      className={cn(
+                        'mt-1 flex w-full items-center justify-center gap-1.5 rounded-ctl px-2 py-1.5 text-xs font-semibold',
+                        arrived
+                          ? 'bg-good-soft text-good'
+                          : received > 0
+                            ? 'bg-warn-soft text-warn'
+                            : 'bg-page text-muted',
+                      )}
+                    >
+                      {arrived ? (
+                        <>
+                          <CheckCircle2 size={14} /> Đã nhận {money(received)} ₫
+                        </>
+                      ) : received > 0 ? (
+                        `Đã nhận ${money(received)} ₫, còn thiếu ${money(Number(transfer.amount) - received)} ₫`
+                      ) : (
+                        <>
+                          <Spinner className="size-3" /> Đang chờ tiền về…
+                        </>
+                      )}
+                    </span>
+                  )}
                 </>
               ) : (
                 <span className="text-xs text-muted">

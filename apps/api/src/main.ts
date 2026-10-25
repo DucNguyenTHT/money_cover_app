@@ -7,12 +7,14 @@ import { prisma } from './core/db';
 import { startScheduler as startBackups } from './modules/backup/backup.service';
 import { startScheduler as startNotify } from './modules/notify/notify.service';
 import { morningDigest } from './modules/notify/digests';
+import { startScheduler as startBankFeed } from './modules/bank/bank.service';
 
 const server = createServer(createApp());
 attachRealtime(server);
 
 startBackups();
 startNotify(morningDigest);
+startBankFeed();
 server.listen(env.PORT, () => logger.info(`API chạy tại http://localhost:${env.PORT} (tài liệu: /api/docs)`));
 
 const shutdown = async () => {

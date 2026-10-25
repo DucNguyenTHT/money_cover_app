@@ -57,6 +57,8 @@ const include = {
     orderBy: { id: 'asc' },
   },
   payments: { orderBy: { id: 'asc' } },
+  // Money matched on the bank account (bank feed); ignored transactions are never tied to an order.
+  bankTransactions: { where: { ignoredAt: null }, select: { amount: true } },
 } as const;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof include }>;
 
@@ -148,6 +150,7 @@ function toDto(o: OrderRow, names: Map<number, string>): OrderDto {
       cashReceived: str(p.cashReceived),
       change: str(p.change),
     })),
+    transferReceived: o.bankTransactions.reduce((sum, t) => sum.add(t.amount.toString()), ZERO).toString(),
   };
 }
 
@@ -835,6 +838,8 @@ export async function merge(user: AuthUser, id: number, version: number, targetO
     const b = await loadOpen(tx, second, second === id ? version : null);
     const [src, dst] = a.id === id ? [a, b] : [b, a];
     await tx.orderItem.updateMany({ where: { orderId: src.id }, data: { orderId: dst.id } });
+    // A transfer already received for the merged order now pays the target.
+    await tx.bankTransaction.updateMany({ where: { orderId: src.id }, data: { orderId: dst.id } });
     await tx.order.update({ where: { id: dst.id }, data: { guestCount: dst.guestCount + src.guestCount } });
     await tx.order.update({
       where: { id: src.id },

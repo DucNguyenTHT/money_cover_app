@@ -146,6 +146,19 @@ enum NotifyKind {
   ALERT
 }
 
+/// Dịch vụ báo biến động số dư mà quán dùng.
+enum BankProvider {
+  SEPAY
+  CASSO
+}
+
+/// CODE = nội dung chuyển khoản có mã đơn; AMOUNT = đúng số tiền một máy POS đang chờ; MANUAL = người gán.
+enum MatchKind {
+  CODE
+  AMOUNT
+  MANUAL
+}
+
 // ---------------------------------------------------------------- catalog & config
 
 /// Cơ sở
@@ -530,11 +543,12 @@ model Order {
   cancelKind           CancelKind?   @map("cancel_kind")
   cancelReason         String?       @map("cancel_reason")
 
-  table       DiningTable?   @relation(fields: [tableId], references: [id])
-  deliveryApp DeliveryApp?   @relation(fields: [deliveryAppId], references: [id])
-  items       OrderItem[]
-  payments    OrderPayment[]
-  issues      Issue[]
+  table            DiningTable?      @relation(fields: [tableId], references: [id])
+  deliveryApp      DeliveryApp?      @relation(fields: [deliveryAppId], references: [id])
+  items            OrderItem[]
+  payments         OrderPayment[]
+  issues           Issue[]
+  bankTransactions BankTransaction[]
 
   @@index([businessDate, status])
   @@index([tableId, status])
@@ -657,6 +671,39 @@ model DayClosing {
 
   @@unique([branchId, businessDate])
   @@map("day_closings")
+}
+
+/// Tiền chuyển khoản về
+/// Tiền vào tài khoản ngân hàng của quán, đọc từ dịch vụ báo biến động số dư (SePay / Casso); khớp với đơn theo mã đơn trong nội dung chuyển khoản để biết khách đã trả thật.
+/// Lưu: dịch vụ, mã giao dịch bên dịch vụ, số tài khoản, số tiền, nội dung, mã tham chiếu ngân hàng, thời điểm, ngày kinh doanh, đơn đã khớp (cách khớp, người gán), bỏ qua (lý do).
+model BankTransaction {
+  id           Int          @id @default(autoincrement())
+  branchId     Int          @map("branch_id")
+  provider     BankProvider
+  externalId   String       @map("external_id")
+  accountNo    String?      @map("account_no")
+  amount       Decimal      @db.Decimal(16, 2)
+  description  String
+  reference    String?
+  bankName     String?      @map("bank_name")
+  transactedAt DateTime     @map("transacted_at") @db.Timestamptz
+  businessDate DateTime     @map("business_date") @db.Date
+  orderId      Int?         @map("order_id")
+  matchKind    MatchKind?   @map("match_kind")
+  matchedById  Int?         @map("matched_by")
+  matchedAt    DateTime?    @map("matched_at") @db.Timestamptz
+  /// Not sales money (owner's own transfer, a supplier refund…): left out of the checks.
+  ignoredAt    DateTime?    @map("ignored_at") @db.Timestamptz
+  ignoredById  Int?         @map("ignored_by")
+  ignoreReason String?      @map("ignore_reason")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalId])
+  @@index([branchId, businessDate])
+  @@index([orderId])
+  @@map("bank_transactions")
 }
 
 // ---------------------------------------------------------------- inventory

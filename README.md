@@ -1,6 +1,6 @@
 # Quán ăn — Bán hàng (POS) & Kế toán nội bộ
 
-Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR, đơn app giao hàng), kho FIFO theo lô (nhập, xuất, nợ kho,
+Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR tự xác nhận tiền về qua SePay / Casso, đơn app giao hàng), kho FIFO theo lô (nhập, xuất, nợ kho,
 kiểm kê, tồn tối thiểu & gợi ý nhập hàng), nhà cung cấp & công nợ, sổ quỹ tiền mặt, nhân viên (ca làm, chấm công,
 bảng lương, tạm ứng), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá, lãi của size /
 topping), lãi lỗ tháng / quý / năm, khoá sổ, lưu trữ chứng từ (ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên
@@ -16,7 +16,7 @@ tin nhắc việc buổi sáng, cảnh báo gian lận gửi chủ quán qua Tel
 
 Sơ đồ hệ thống, database và API (luôn khớp phiên bản đang chạy): `/api/docs/architecture` — dev: http://localhost:4000/api/docs/architecture.
 
-Tài liệu: [kiến trúc](docs/architecture.md) · [quy tắc nghiệp vụ](docs/business-rules.md) · [cài máy chủ tại quán](docs/setup-store.md) · [máy in](docs/setup-printer.md) · [Google Drive](docs/setup-google-drive.md) · [Telegram](docs/setup-telegram.md) · [thuế GTGT & hộ kinh doanh](docs/thue-gtgt-viet-nam.md) · [áp dụng thuế trong app](docs/ap-dung-thue-trong-app.md)
+Tài liệu: [kiến trúc](docs/architecture.md) · [quy tắc nghiệp vụ](docs/business-rules.md) · [cài máy chủ tại quán](docs/setup-store.md) · [máy in](docs/setup-printer.md) · [Google Drive](docs/setup-google-drive.md) · [Telegram](docs/setup-telegram.md) · [tự xác nhận chuyển khoản](docs/setup-bank-feed.md) · [thuế GTGT & hộ kinh doanh](docs/thue-gtgt-viet-nam.md) · [áp dụng thuế trong app](docs/ap-dung-thue-trong-app.md)
 
 ## Chạy trên máy dev
 

@@ -8,6 +8,8 @@ export interface ServerToClientEvents {
   'kitchen:update': (p: { station: Station; itemIds: number[] }) => void;
   'dish:availability': (p: { dishId: number; soldOut: boolean }) => void;
   'printer:error': (p: { printerName: string; message: string }) => void;
+  /** Money arrived on the shop's bank account (tied to an order, or not yet). */
+  'bank:txn': (p: { orderId: number | null; orderCode: string | null; amount: string }) => void;
 }
 
 export interface ClientToServerEvents {

@@ -88,6 +88,7 @@ const adminScreens: Record<string, Pick<RouteObject, 'lazy'> & { staff?: boolean
   ),
   'accounting/overheads': lazyComponent(() => import('@/features/accounting/OverheadsPage'), 'OverheadsPage'),
   'accounting/cash': lazyComponent(() => import('@/features/cash/CashBookPage'), 'CashBookPage'),
+  'accounting/bank': lazyComponent(() => import('@/features/bank/BankPage'), 'BankPage'),
   'accounting/periods': lazyComponent(() => import('@/features/accounting/PeriodsPage'), 'PeriodsPage'),
   'staff/attendance': lazyComponent(() => import('@/features/staff/AttendancePage'), 'AttendancePage'),
   'staff/payroll': lazyComponent(() => import('@/features/staff/PayrollPage'), 'PayrollPage'),

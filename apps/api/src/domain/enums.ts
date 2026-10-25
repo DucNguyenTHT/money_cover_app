@@ -79,6 +79,14 @@ export type TaxRegime = (typeof TAX_REGIMES)[number];
 export const NOTIFY_KINDS = values('DAILY', 'MORNING', 'ALERT');
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 
+/** Bank-feed services (báo biến động số dư) the shop may connect. */
+export const BANK_PROVIDERS = values('SEPAY', 'CASSO');
+export type BankProvider = (typeof BANK_PROVIDERS)[number];
+
+/** How a bank transfer was tied to an order: order code in the content, the amount a till waited for, by hand. */
+export const MATCH_KINDS = values('CODE', 'AMOUNT', 'MANUAL');
+export type MatchKind = (typeof MATCH_KINDS)[number];
+
 /** Price list used by each sales channel. */
 export const PRICE_TYPE_BY_CHANNEL: Record<Channel, PriceType> = {
   DINE_IN: 'STORE',

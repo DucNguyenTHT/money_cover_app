@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { AlertTriangle, CheckCircle2, Lock } from 'lucide-react';
-import type { DayClosingDto } from '@ketoan/api/contracts';
+import type { BankTxnDto, DayClosingDto, DayPreview } from '@ketoan/api/contracts';
+import { BankMatchDialog } from '@/components/BankMatchDialog';
 import { businessDateOf } from '@ketoan/api/domain';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -124,6 +125,12 @@ export function DayClosingPage({ inPos = false }: { inPos?: boolean }) {
               </tbody>
             </table>
           </Card>
+          {p?.transfer && (
+            <TransferCheck
+              t={p.transfer}
+              onChanged={() => qc.invalidateQueries({ queryKey: posKeys.day(date) })}
+            />
+          )}
         </div>
 
         <Card className="flex flex-col gap-3 p-4">
@@ -262,6 +269,98 @@ export function DayClosingPage({ inPos = false }: { inPos?: boolean }) {
         />
       </Card>
     </div>
+  );
+}
+
+/** Bank feed: the day's transfers against the money that reached the account. */
+function TransferCheck({ t, onChanged }: { t: NonNullable<DayPreview['transfer']>; onChanged: () => void }) {
+  const toast = useToast();
+  const [matching, setMatching] = useState<BankTxnDto | null>(null);
+  const short = t.orders.filter((o) => o.check === 'SHORT');
+  const over = t.orders.filter((o) => o.check === 'OVER');
+  const ok = !short.length && !over.length && !t.unmatched.length;
+  return (
+    <Card>
+      <h2 className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3 font-semibold">
+        Chuyển khoản — đối chiếu tài khoản ngân hàng
+        <Badge tone={ok ? 'good' : 'warn'}>{ok ? 'Khớp' : 'Cần xem'}</Badge>
+      </h2>
+      <div className="flex flex-col gap-3 p-4 text-[13px]">
+        <dl className="grid grid-cols-[1fr_auto] gap-y-1">
+          <dt className="text-muted">Thu ngân ghi chuyển khoản</dt>
+          <dd className="num">{money(t.expected)}</dd>
+          <dt className="text-muted">Tiền về khớp các đơn đó</dt>
+          <dd
+            className={cn(
+              'num font-semibold',
+              Number(t.received) < Number(t.expected) ? 'text-bad' : 'text-good',
+            )}
+          >
+            {money(t.received)}
+          </dd>
+        </dl>
+        {short.length > 0 && (
+          <div className="rounded-ctl bg-bad-soft p-3 text-bad-ink">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <AlertTriangle size={15} /> {short.length} đơn chưa thấy tiền về
+            </p>
+            <ul className="mt-1 flex flex-col gap-0.5">
+              {short.map((o) => (
+                <li key={o.orderId} className="num">
+                  {o.code}: ghi {money(o.expected)}, về {money(o.received)}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-xs">
+              Khách có thể chuyển nhầm nội dung — tìm khoản đó bên dưới và gán vào đơn; không có thì hỏi lại
+              khách.
+            </p>
+          </div>
+        )}
+        {over.map((o) => (
+          <p key={o.orderId} className="rounded-ctl bg-warn-soft px-3 py-2 text-warn">
+            Đơn {o.code}
+            {o.status === 'CANCELLED' ? ' đã huỷ nhưng' : ''} nhận {money(o.received)} (ghi{' '}
+            {money(o.expected)}) — kiểm tra có cần hoàn tiền cho khách không.
+          </p>
+        ))}
+        {t.unmatched.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="font-semibold text-warn">Tiền về chưa rõ của đơn nào</p>
+            <ul className="flex flex-col divide-y divide-[#f2f4f7] rounded-ctl border border-line">
+              {t.unmatched.map((x) => (
+                <li key={x.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0">
+                    <b className="num">{money(x.amount)}</b>{' '}
+                    <span className="text-muted">
+                      {new Date(x.transactedAt).toLocaleTimeString('vi-VN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                    <span className="block truncate text-xs text-faint">{x.description || '—'}</span>
+                  </span>
+                  <Button size="sm" variant="tonal" onClick={() => setMatching(x)}>
+                    Gán vào đơn
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      {matching && (
+        <BankMatchDialog
+          txn={matching}
+          onClose={() => setMatching(null)}
+          onDone={(x) => {
+            setMatching(null);
+            onChanged();
+            toast(`Đã gán vào đơn ${x.orderCode}`);
+          }}
+        />
+      )}
+    </Card>
   );
 }
 

@@ -12,6 +12,7 @@ import {
   VAT_MODES,
 } from '../domain/enums';
 import { commonErrors, decimalString, isoDate, reason, type RouteMeta } from './common';
+import { dayTransferSchema } from './bank.contract';
 
 const c = initContract();
 const sellers = { roles: ['ADMIN', 'STAFF'] } satisfies RouteMeta;
@@ -107,6 +108,8 @@ export const orderSchema = z.object({
   cancelReason: z.string().nullable(),
   items: z.array(orderItemSchema),
   payments: z.array(paymentSchema),
+  /** Money matched to this order on the shop's bank account (bank feed; "0" without one). */
+  transferReceived: decimalString,
 });
 export type OrderDto = z.infer<typeof orderSchema>;
 
@@ -484,6 +487,8 @@ export const dayPreviewSchema = z.object({
   /** cashSales + cashIn − cashOut. */
   expectedCash: decimalString,
   closing: dayClosingSchema.nullable(),
+  /** Transfers checked against the bank account (null without a bank feed). */
+  transfer: dayTransferSchema,
 });
 export type DayPreview = z.infer<typeof dayPreviewSchema>;
 

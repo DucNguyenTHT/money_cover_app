@@ -275,6 +275,12 @@ export const dashboardSchema = z.object({
     /** Database backup needs attention (see backups.contract). */
     backup: z.enum(['NEVER', 'FAILED', 'STALE', 'DRIVE_FAILED', 'TELEGRAM_FAILED']).nullable(),
     lockedPins: z.number(),
+    /** Bank feed: paid orders of the last 30 days (before today) whose transfer has not arrived. */
+    unverifiedTransfers: z.number(),
+    /** Bank feed: money received (before today) not tied to an order. */
+    unmatchedTransfers: z.number(),
+    /** Bank feed set up but the last reading failed. */
+    bankFeedError: z.string().nullable(),
   }),
   /** Household tax threshold watch (null for a company). */
   tax: z

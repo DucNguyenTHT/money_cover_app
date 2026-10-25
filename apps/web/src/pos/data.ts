@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OptionGroupDto, OrderDto } from '@ketoan/api/contracts';
 import { optionsLabel, type Channel, type OptionGroupDef } from '@ketoan/api/domain';
 import { client, ok } from '@/lib/api-client';
+import { money } from '@/lib/format';
 import { useRealtime } from '@/lib/socket';
 
 export const posKeys = {
@@ -83,11 +84,23 @@ export const usePosSettings = () =>
     staleTime: 300_000,
   });
 
-/** Keep every POS query fresh from server pushes (other tills, kitchen, sold-out flags, printer problems). */
-export function usePosRealtime(onPrinterError?: (message: string) => void) {
+/**
+ * Keep every POS query fresh from server pushes (other tills, kitchen, sold-out flags, printer problems).
+ * `onNotice` gets the messages a till should show (printer failures, money that arrived on the bank).
+ */
+export function usePosRealtime(onNotice?: (message: string, tone: 'good' | 'bad') => void) {
   const qc = useQueryClient();
   useRealtime({
-    'printer:error': ({ printerName, message }) => onPrinterError?.(`Máy in ${printerName}: ${message}`),
+    'printer:error': ({ printerName, message }) => onNotice?.(`Máy in ${printerName}: ${message}`, 'bad'),
+    'bank:txn': ({ orderCode, amount }) => {
+      qc.invalidateQueries({ queryKey: ['pos', 'day'] });
+      onNotice?.(
+        orderCode
+          ? `Tiền chuyển khoản về ${money(amount)} ₫ — đơn ${orderCode}`
+          : `Có ${money(amount)} ₫ chuyển khoản về chưa rõ của đơn nào — gán ở Chốt ngày`,
+        'good',
+      );
+    },
     'table:update': () => qc.invalidateQueries({ queryKey: posKeys.floor }),
     'order:update': ({ orderId }) => {
       qc.invalidateQueries({ queryKey: posKeys.order(orderId) });

@@ -3,6 +3,7 @@ import {
   ListPlus,
   PackageSearch,
   BarChart3,
+  Banknote,
   Bike,
   BookOpen,
   CalendarClock,
@@ -171,6 +172,7 @@ export const NAV: NavModule[] = [
         title: 'Kế toán',
         items: [
           { label: 'Sổ quỹ tiền mặt', icon: Wallet, path: '/admin/accounting/cash' },
+          { label: 'Tiền chuyển khoản', icon: Banknote, path: '/admin/accounting/bank' },
           { label: 'Chi phí chung', icon: Coins, path: '/admin/accounting/overheads' },
           { label: 'Khoá sổ tháng', icon: ShieldCheck, path: '/admin/accounting/periods' },
         ],

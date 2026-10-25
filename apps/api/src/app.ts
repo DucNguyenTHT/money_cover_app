@@ -29,6 +29,7 @@ import { telegramRouter } from './modules/telegram/telegram.router';
 import { cashRouter } from './modules/cash/cash.router';
 import { suppliersRouter } from './modules/suppliers/suppliers.router';
 import { staffRouter } from './modules/staff/staff.router';
+import { bankRouter } from './modules/bank/bank.router';
 import { architecturePage } from './modules/architecture/architecture.page';
 
 export function createApp() {
@@ -94,6 +95,7 @@ export function createApp() {
     cash: cashRouter,
     suppliers: suppliersRouter,
     staff: staffRouter,
+    bank: bankRouter,
   });
   createExpressEndpoints(api, router, app, {
     globalMiddleware: [authMiddleware],

@@ -53,6 +53,25 @@ Các công thức nằm trong `apps/api/src/domain` (có unit test). Tài liệu
 - Không xoá, chỉ **huỷ có lý do** (vẫn hiện, gạch ngang): người ghi được huỷ trong ngày, ADMIN huỷ bất cứ lúc nào.
 - Khoản do màn hình khác tự ghi (trả nhà cung cấp, trả lương, tạm ứng bằng tiền mặt) chỉ huỷ ở màn hình đó.
 
+## Tự xác nhận tiền chuyển khoản
+
+Cần nối SePay hoặc Casso (Cài đặt › Tự xác nhận tiền chuyển khoản, hướng dẫn: `setup-bank-feed.md`). App đọc **tiền
+vào** tài khoản mỗi phút (mỗi 4 giây với SePay / 30 giây với Casso khi có máy POS đang chờ tiền), mới nhất trước, dừng ở
+giao dịch đã có; chỉ giữ giao dịch của tài khoản VietQR (hoặc tài khoản ghi trong cài đặt).
+
+| Cách khớp    | Khi nào                                                                                                                      |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Theo mã đơn  | Nội dung có mã đơn của ngày đó ±2 ngày; so **chữ và số** (bỏ dấu, dấu gạch, hoa thường); mã dài nhất thắng                   |
+| Theo số tiền | Không có mã, đúng số tiền một máy POS đang chờ (màn thanh toán chuyển khoản đang mở, 3 phút) — chỉ khi **một** máy chờ số đó |
+| Gán tay      | Nhân viên: khoản chưa gán của ngày hôm nay. ADMIN: mọi khoản, bỏ gán (lý do), bỏ qua tiền không phải bán hàng (lý do)        |
+
+- Khớp tiền **không đổi doanh thu, sổ quỹ hay lãi lỗ** — chỉ để đối chiếu: đơn đã thanh toán có tiền chuyển khoản ghi
+  ở POS so với tiền về khớp đơn đó → _đủ_, _thiếu_ (chưa thấy tiền), _thừa_ (trả hai lần, hoặc đơn đã huỷ mà khách đã
+  chuyển — cần xem hoàn tiền).
+- Gộp đơn: tiền đã về của đơn nguồn chuyển sang đơn đích. Đơn bị huỷ giữ khoản đã khớp để biết cần hoàn tiền.
+- Chốt ngày hiện khung đối chiếu (không chặn chốt). Chuông và tin sáng: đơn thiếu tiền / khoản chưa gán của 30 ngày
+  trước hôm nay, và lỗi đọc dịch vụ. Báo cáo chốt ngày trên Telegram có thêm dòng chuyển khoản.
+
 ## Nhà cung cấp & công nợ
 
 - Phiếu nhập hàng gắn một nhà cung cấp theo tên (không phân biệt hoa thường; chưa có thì tự tạo). Phiếu trả ngay

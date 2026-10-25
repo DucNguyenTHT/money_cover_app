@@ -13,6 +13,7 @@ import { logger } from '../../core/logger';
 import { dayTotals } from '../cash/cash.service';
 import * as notify from '../notify/notify.service';
 import { dailyReport } from '../notify/digests';
+import { dayTransfer } from '../bank/bank.service';
 
 const emptyByMethod = () =>
   Object.fromEntries(PAYMENT_METHODS.map((m) => [m, '0'])) as Record<PaymentMethod, string>;
@@ -67,6 +68,7 @@ export async function preview(date: string): Promise<DayPreview> {
     cashOut: book.out.toString(),
     expectedCash: cashSales.add(book.in).sub(book.out).toString(),
     closing: closing ? await toDto(closing) : null,
+    transfer: await dayTransfer(date),
   };
 }
 

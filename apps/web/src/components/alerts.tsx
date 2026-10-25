@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
+  Banknote,
   BadgeAlert,
   Ban,
   Bell,
@@ -68,6 +69,15 @@ export function alertItems(d: Dashboard): AlertItem[] {
       ? [{ icon: DatabaseBackup, text: BACKUP_TEXT[d.alerts.backup], to: '/admin/system/settings' }]
       : []),
     ...taxItems(d),
+    ...(d.alerts.bankFeedError
+      ? [
+          {
+            icon: Banknote,
+            text: `Đọc tiền chuyển khoản lỗi: ${d.alerts.bankFeedError}`,
+            to: '/admin/system/settings#bank-feed',
+          },
+        ]
+      : []),
     ...(monthProfit < 0
       ? [
           {
@@ -125,6 +135,18 @@ export function alertItems(d: Dashboard): AlertItem[] {
       n: d.alerts.unclosedDays,
       text: 'ngày trong tháng chưa chốt tiền',
       to: '/admin/orders/day-closings',
+    },
+    {
+      icon: Banknote,
+      n: d.alerts.unverifiedTransfers,
+      text: 'đơn chuyển khoản các ngày trước chưa thấy tiền về',
+      to: '/admin/accounting/bank',
+    },
+    {
+      icon: Banknote,
+      n: d.alerts.unmatchedTransfers,
+      text: 'khoản tiền chuyển khoản về chưa gán vào đơn',
+      to: '/admin/accounting/bank',
     },
     {
       icon: KeyRound,

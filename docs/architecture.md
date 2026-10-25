@@ -13,6 +13,7 @@ máy tính bảng / máy thu ngân ── HTTPS (Caddy, CA nội bộ) ──┬
 api ── PostgreSQL 16          api ── TCP 9100 ── máy in nhiệt LAN
 api ── pg_dump 02:00 ──► backups/ ──(tuỳ chọn, Internet)──► Telegram bot · Google Drive của chủ quán
 api ── telegram_messages (hàng đợi) ──(Internet)──► Telegram: báo cáo chốt ngày, tin sáng, cảnh báo
+api ──(Internet, mỗi phút / 4 giây khi POS chờ)──► SePay / Casso: tiền vào tài khoản → bank_transactions
 ```
 
 Monorepo pnpm + Turborepo, 2 app:
@@ -90,5 +91,8 @@ pnpm e2e -- onboarding
   `settings` dưới khoá riêng, không thuộc schema cài đặt công khai nên không bao giờ trả ra trình duyệt.
 - **Tin cho chủ quán qua hàng đợi** (`modules/notify`): service ghi tin vào `telegram_messages` bằng chính `tx` của
   thao tác (rollback thì không có tin), worker trong API gửi mỗi phút và ngay sau khi có tin; mất mạng thì tin chờ.
-  Nội dung tin là hàm thuần (`domain/notify/messages.ts`); số liệu lấy từ `modules/notify/digests.ts`. Tính năng
-  khác thêm dòng vào báo cáo qua `addDailyLines` / `addMorningLines`.
+  Nội dung tin là hàm thuần (`domain/notify/messages.ts`); số liệu lấy từ `modules/notify/digests.ts`, nơi gọi
+  thẳng các module có dòng riêng (vd `bank.dailyLines`) — không dùng đăng ký lúc nạp module để tránh vòng import.
+- **Tiền chuyển khoản đọc bằng cách hỏi định kỳ** (`modules/bank`), không dùng webhook: máy chủ ở trong LAN của quán,
+  không phải mở cổng ra Internet. Đọc mới nhất trước, dừng ở giao dịch đã có; khớp theo mã đơn (mã VietQR) chỉ so chữ
+  và số vì ngân hàng tự sửa nội dung. Máy POS đang chờ thì đọc dày hơn và bắt được khoản đúng số tiền mà không ghi mã.

@@ -9,17 +9,10 @@ import { dailyReportText, morningText } from '../../domain/notify/messages';
 import { businessToday, getSettings } from '../settings/settings.service';
 import { stock } from '../inventory/inventory.service';
 import { daily, dashboard } from '../reports/reports.service';
+import * as bank from '../bank/bank.service';
 
 const addDays = (iso: string, n: number) =>
   fromDbDate(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400_000));
-
-/** Lines other features add to the messages (transfers not received yet, e-invoices that failed…). */
-type ExtraLines = (date: string) => Promise<string[]>;
-const dailyExtras: ExtraLines[] = [];
-const morningExtras: ExtraLines[] = [];
-export const addDailyLines = (fn: ExtraLines) => dailyExtras.push(fn);
-export const addMorningLines = (fn: ExtraLines) => morningExtras.push(fn);
-const extras = async (fns: ExtraLines[], date: string) => (await Promise.all(fns.map((f) => f(date)))).flat();
 
 /** The business day before `date` that had sales (null when none in the last week). */
 async function previousDay(date: string) {
@@ -56,7 +49,7 @@ export async function dailyReport(p: DayPreview, closing: DayClosingDto, reclose
     closedBy: closing.closedByName,
     closedAt: closing.closedAt,
     note: closing.note,
-    extra: await extras(dailyExtras, p.businessDate),
+    extra: await bank.dailyLines(p.businessDate),
   });
 }
 
@@ -110,6 +103,6 @@ export async function morningDigest(now = new Date()): Promise<string> {
     unclosedDays: unclosed.filter((x) => x !== prev?.day).length,
     backup: d.alerts.backup ? BACKUP_TEXT[d.alerts.backup] : null,
     tax: d.tax,
-    extra: await extras(morningExtras, today),
+    extra: await bank.morningLines(),
   });
 }

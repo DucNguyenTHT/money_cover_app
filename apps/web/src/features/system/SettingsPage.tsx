@@ -10,6 +10,7 @@ import { Field, Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { BackupSection } from './BackupSection';
+import { BankFeedSection } from './BankFeedSection';
 import { GoogleDriveSection } from './GoogleDriveSection';
 import { NotifySection } from './NotifySection';
 import { TelegramSection } from './TelegramSection';
@@ -268,6 +269,10 @@ export function SettingsPage() {
           </Field>
           <Field label="Tên chủ tài khoản">{(id) => <Input id={id} {...text('bank_account_name')} />}</Field>
         </Section>
+
+        <div id="bank-feed" className="scroll-mt-20">
+          <BankFeedSection />
+        </div>
 
         <Section title="Giá vốn & giá bán" hint="Dùng cho bảng tính giá và cảnh báo khi giá nhập tăng">
           <Field label="% nguyên liệu / giá bán mục tiêu (mặc định)">

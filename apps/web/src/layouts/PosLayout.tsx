@@ -40,8 +40,9 @@ function PosShell() {
   const online = useOnline();
   const searchRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
-  // Any till may trigger a print (e.g. a kitchen ticket); every till hears when a printer fails.
-  usePosRealtime((message) => toast(message, 'bad'));
+  // Any till may trigger a print (e.g. a kitchen ticket); every till hears when a printer fails, and when money
+  // arrives on the bank account.
+  usePosRealtime(toast);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
