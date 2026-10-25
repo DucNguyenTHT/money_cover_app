@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Coins,
   Contact,
+  FileCheck2,
   FileImage,
   FileSpreadsheet,
   Landmark,
@@ -173,6 +174,7 @@ export const NAV: NavModule[] = [
         items: [
           { label: 'Sổ quỹ tiền mặt', icon: Wallet, path: '/admin/accounting/cash' },
           { label: 'Tiền chuyển khoản', icon: Banknote, path: '/admin/accounting/bank' },
+          { label: 'Hoá đơn điện tử', icon: FileCheck2, path: '/admin/accounting/einvoices' },
           { label: 'Chi phí chung', icon: Coins, path: '/admin/accounting/overheads' },
           { label: 'Khoá sổ tháng', icon: ShieldCheck, path: '/admin/accounting/periods' },
         ],

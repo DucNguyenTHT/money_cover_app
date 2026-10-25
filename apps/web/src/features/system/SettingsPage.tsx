@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { BackupSection } from './BackupSection';
 import { BankFeedSection } from './BankFeedSection';
+import { EInvoiceSection } from './EInvoiceSection';
 import { GoogleDriveSection } from './GoogleDriveSection';
 import { NotifySection } from './NotifySection';
 import { TelegramSection } from './TelegramSection';
@@ -254,6 +255,10 @@ export function SettingsPage() {
             </div>
           </fieldset>
         </Section>
+
+        <div id="einvoice" className="scroll-mt-20">
+          <EInvoiceSection />
+        </div>
 
         <Section
           title="Chuyển khoản (VietQR)"

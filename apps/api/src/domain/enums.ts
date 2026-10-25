@@ -87,6 +87,17 @@ export type BankProvider = (typeof BANK_PROVIDERS)[number];
 export const MATCH_KINDS = values('CODE', 'AMOUNT', 'MANUAL');
 export type MatchKind = (typeof MATCH_KINDS)[number];
 
+/** E-invoice providers: MOCK issues fake invoices to try the flow; SEPAY = SePay eInvoice. */
+export const EINVOICE_PROVIDERS = values('MOCK', 'SEPAY');
+export type EInvoiceProvider = (typeof EINVOICE_PROVIDERS)[number];
+
+export const EINVOICE_STATUSES = values('PENDING', 'SENDING', 'ISSUED', 'FAILED', 'CANCELLED');
+export type EInvoiceStatus = (typeof EINVOICE_STATUSES)[number];
+
+/** ORIGINAL = the invoice of a sale; ADJUSTMENT = full decrease when an issued sale is cancelled. */
+export const EINVOICE_KINDS = values('ORIGINAL', 'ADJUSTMENT');
+export type EInvoiceKind = (typeof EINVOICE_KINDS)[number];
+
 /** Price list used by each sales channel. */
 export const PRICE_TYPE_BY_CHANNEL: Record<Channel, PriceType> = {
   DINE_IN: 'STORE',

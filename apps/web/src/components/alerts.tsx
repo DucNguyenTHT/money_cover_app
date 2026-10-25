@@ -10,6 +10,7 @@ import {
   CalendarX,
   DatabaseBackup,
   Clock,
+  FileX2,
   KeyRound,
   Landmark,
   PackageSearch,
@@ -147,6 +148,18 @@ export function alertItems(d: Dashboard): AlertItem[] {
       n: d.alerts.unmatchedTransfers,
       text: 'khoản tiền chuyển khoản về chưa gán vào đơn',
       to: '/admin/accounting/bank',
+    },
+    {
+      icon: FileX2,
+      n: d.alerts.einvoiceFailed,
+      text: 'hoá đơn điện tử bị nhà cung cấp từ chối — gửi lại',
+      to: '/admin/accounting/einvoices',
+    },
+    {
+      icon: FileX2,
+      n: d.alerts.einvoiceStuck,
+      text: 'hoá đơn điện tử chờ quá 1 giờ chưa phát hành',
+      to: '/admin/accounting/einvoices',
     },
     {
       icon: KeyRound,

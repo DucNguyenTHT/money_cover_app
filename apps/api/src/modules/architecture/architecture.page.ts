@@ -355,6 +355,7 @@ function architectureSection() {
     <div class="row">
       ${box('Google Drive của chủ quán', 'bản sao lưu hằng đêm (tự động) · .zip chứng từ (bấm tay) · OAuth mã thiết bị, Client ID nhập trong Cài đặt · quyền drive.file', 'cloud')}
       ${box('Telegram của chủ quán', 'bot gửi file sao lưu hằng đêm + từng file chứng từ mới (≤ 50 MB / file) · báo cáo chốt ngày, tin buổi sáng, cảnh báo (có thể vào nhóm khác)', 'cloud')}
+      ${box('Nhà cung cấp hoá đơn điện tử', 'chọn trong Cài đặt: Giả lập hoặc SePay eInvoice · gửi lại khi mất mạng · Client Secret mã hoá', 'cloud')}
       ${box('SePay / Casso', 'dịch vụ báo biến động số dư: api đọc tiền vào tài khoản mỗi phút (vài giây khi POS chờ tiền) · mã API mã hoá', 'cloud')}
       ${box('Ổ cứng ngoài / OneDrive', 'scripts/backup-db.ps1 lúc 03:00 chép backups/ + ảnh chứng từ → BACKUP_COPY_DIR', 'cloud')}
     </div>
@@ -414,6 +415,11 @@ function flowsSection() {
         'Tiền chuyển khoản về',
         'SePay / Casso: đọc tiền vào tài khoản, khớp mã đơn trong nội dung (hoặc đúng số tiền POS đang chờ); POS báo đã nhận',
         'bank_transactions · settings.bank_feed (mã hoá)',
+      ],
+      [
+        'Hoá đơn điện tử',
+        'xếp hàng cùng lúc thanh toán; worker gửi nhà cung cấp (Giả lập / SePay eInvoice), theo dõi tới khi phát hành; bill in số + QR tra cứu; huỷ đơn → điều chỉnh giảm',
+        'einvoices · settings.einvoice (mã hoá)',
       ],
       [
         'Trừ kho FIFO',

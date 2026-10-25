@@ -30,6 +30,7 @@ import { cashRouter } from './modules/cash/cash.router';
 import { suppliersRouter } from './modules/suppliers/suppliers.router';
 import { staffRouter } from './modules/staff/staff.router';
 import { bankRouter } from './modules/bank/bank.router';
+import { einvoiceRouter } from './modules/einvoice/einvoice.router';
 import { architecturePage } from './modules/architecture/architecture.page';
 
 export function createApp() {
@@ -96,6 +97,7 @@ export function createApp() {
     suppliers: suppliersRouter,
     staff: staffRouter,
     bank: bankRouter,
+    einvoice: einvoiceRouter,
   });
   createExpressEndpoints(api, router, app, {
     globalMiddleware: [authMiddleware],

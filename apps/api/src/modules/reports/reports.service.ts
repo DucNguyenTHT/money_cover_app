@@ -71,6 +71,7 @@ import { issue as backupIssue } from '../backup/backup.service';
 import { stock } from '../inventory/inventory.service';
 import * as pricing from '../pricing/pricing.service';
 import { alerts as bankAlerts } from '../bank/bank.service';
+import { alerts as einvoiceAlerts } from '../einvoice/einvoice.service';
 
 type Dec = Prisma.Decimal | null | undefined;
 const m = (v: Dec) => (v ? v.toString() : '0');
@@ -758,6 +759,7 @@ export async function dashboard(): Promise<Dashboard> {
     lowStock,
     ytdSales,
     bank,
+    einvoices,
   ] = await Promise.all([
     daily(from30, today),
     prisma.$queryRawTyped(reportByHour(branchId, day(today), day(today))),
@@ -786,6 +788,7 @@ export async function dashboard(): Promise<Dashboard> {
       _sum: { netRevenue: true },
     }),
     bankAlerts(),
+    einvoiceAlerts(),
   ]);
   const t = days.find((d) => d.day === today);
   const y = days.find((d) => d.day === prevDay(today));
@@ -847,6 +850,7 @@ export async function dashboard(): Promise<Dashboard> {
       staleOpenOrders: openOrders.filter((o) => fromDbDate(o.businessDate) < today).length,
       lockedPins,
       ...bank,
+      ...einvoices,
     },
     tax:
       settings.tax_regime === 'HOUSEHOLD'

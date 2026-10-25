@@ -281,6 +281,10 @@ export const dashboardSchema = z.object({
     unmatchedTransfers: z.number(),
     /** Bank feed set up but the last reading failed. */
     bankFeedError: z.string().nullable(),
+    /** E-invoices refused by the provider (last 30 days). */
+    einvoiceFailed: z.number(),
+    /** E-invoices waiting more than an hour (no Internet, provider down). */
+    einvoiceStuck: z.number(),
   }),
   /** Household tax threshold watch (null for a company). */
   tax: z

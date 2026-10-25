@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { useToast } from '@/components/ui/Toast';
 import { FormError } from '@/auth/AuthCard';
 import { usePosSettings } from './data';
+import { BuyerFields, emptyBuyer, useEInvoicePos } from '@/components/EInvoiceParts';
 import { billHtml, printHtml } from './print';
 
 const METHODS: { value: PaymentMethod; label: string; icon: typeof Banknote }[] = [
@@ -49,6 +50,10 @@ export function PaymentDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [qrSvg, setQrSvg] = useState('');
+  const einv = useEInvoicePos().data;
+  const [invoiceWanted, setInvoiceWanted] = useState(false);
+  const [companyInvoice, setCompanyInvoice] = useState(false);
+  const [buyer, setBuyer] = useState(emptyBuyer);
 
   useEffect(() => {
     if (!open) return;
@@ -68,6 +73,9 @@ export function PaymentDialog({
     );
     setBelowCost(null);
     setError(null);
+    setInvoiceWanted(false);
+    setCompanyInvoice(false);
+    setBuyer(emptyBuyer);
     // Only when the dialog opens (not each time money arrives while it is open).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order.id, order.channel, total]);
@@ -152,6 +160,14 @@ export function PaymentDialog({
             version: order.version,
             print: printBill && settings?.print_mode === 'SERVER',
             belowCostReason: belowCost?.trim() || undefined,
+            ...(einv?.enabled
+              ? {
+                  einvoice: {
+                    issue: einv.mode === 'AUTO' || invoiceWanted,
+                    ...(companyInvoice ? { buyer } : {}),
+                  },
+                }
+              : {}),
             payments: lines
               .filter((l) => Number(l.amount) > 0)
               .map((l) => ({
@@ -316,6 +332,39 @@ export function PaymentDialog({
                 className="rounded-ctl border border-field px-3 py-2 text-sm font-normal text-ink"
               />
             </label>
+          )}
+          {einv?.enabled && (
+            <div className="flex flex-col gap-2 rounded-ctl border border-line-soft p-3 text-[13px]">
+              {einv.mode === 'AUTO' ? (
+                <span className="text-muted">
+                  Hoá đơn điện tử tự xuất khi thanh toán{einv.provider === 'MOCK' ? ' (giả lập)' : ''}.
+                </span>
+              ) : (
+                <label className="flex items-center gap-2 font-medium">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={invoiceWanted}
+                    onChange={(e) => setInvoiceWanted(e.target.checked)}
+                  />
+                  Xuất hoá đơn điện tử{einv.provider === 'MOCK' ? ' (giả lập)' : ''}
+                </label>
+              )}
+              {(einv.mode === 'AUTO' || invoiceWanted) && (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={companyInvoice}
+                    onChange={(e) => setCompanyInvoice(e.target.checked)}
+                  />
+                  Khách lấy hoá đơn có tên / mã số thuế
+                </label>
+              )}
+              {companyInvoice && (einv.mode === 'AUTO' || invoiceWanted) && (
+                <BuyerFields value={buyer} onChange={setBuyer} />
+              )}
+            </div>
           )}
           <FormError message={error} />
           <button type="submit" hidden />

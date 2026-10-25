@@ -72,6 +72,18 @@ giao dịch đã có; chỉ giữ giao dịch của tài khoản VietQR (hoặc 
 - Chốt ngày hiện khung đối chiếu (không chặn chốt). Chuông và tin sáng: đơn thiếu tiền / khoản chưa gán của 30 ngày
   trước hôm nay, và lỗi đọc dịch vụ. Báo cáo chốt ngày trên Telegram có thêm dòng chuyển khoản.
 
+## Hoá đơn điện tử
+
+Bật ở Cài đặt › Hoá đơn điện tử (Giả lập để thử, hoặc SePay eInvoice). Chi tiết và lưu ý pháp lý: `ap-dung-thue-trong-app.md` mục 7.
+
+- **Khi nào:** _Mọi đơn khi thanh toán_, hoặc _Chỉ khi khách lấy_ (thu ngân tích ô ở màn thanh toán). Người mua có tên / MST nhập
+  ở màn thanh toán (MST 10 số, 10 số-3 số hoặc 12 số, phải có tên).
+- **Một đơn một hoá đơn gốc**: gửi lại / bấm hai lần không tạo hoá đơn thứ hai (mã tham chiếu riêng mỗi lần gửi tới nhà cung cấp).
+- **Hàng đợi:** tạo trong cùng transaction với thanh toán; gửi ngay (chờ ≤ 6 giây để bill in kèm số + QR tra cứu), còn lại gửi
+  nền. Mất mạng → thử lại sau 1, 5, 15, 60 phút; quá 3 ngày → _bị từ chối_. Nhà cung cấp từ chối → cảnh báo, gửi lại với mã mới.
+- **Huỷ đơn:** hoá đơn chưa gửi → huỷ; đã phát hành → hoá đơn **điều chỉnh giảm toàn bộ** (số tiền âm), tự gửi khi hoá đơn gốc đã phát hành.
+- Hộ kinh doanh: hoá đơn bán hàng, không ghi thuế suất. Công ty: thuế suất của đơn, tiền thuế chia theo dòng đúng đến đồng.
+
 ## Nhà cung cấp & công nợ
 
 - Phiếu nhập hàng gắn một nhà cung cấp theo tên (không phân biệt hoa thường; chưa có thì tự tạo). Phiếu trả ngay
@@ -179,6 +191,10 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 | Sổ quỹ: ghi khoản thu chi                                     | ✓     | ✓ (huỷ: khoản mình, trong ngày) |               |
 | Nhà cung cấp: xem công nợ, trả tiền                           | ✓     | ✓                               |               |
 | Nhà cung cấp: thêm / sửa, huỷ lần trả                         | ✓     |                                 |               |
+| Tiền chuyển khoản: xem, gán khoản chưa gán trong ngày         | ✓     | ✓                               |               |
+| Tiền chuyển khoản: nối dịch vụ, bỏ gán, bỏ qua                | ✓     |                                 |               |
+| Hoá đơn điện tử: xuất cho đơn, gửi lại                        | ✓     | ✓                               |               |
+| Hoá đơn điện tử: chọn nhà cung cấp, xem danh sách             | ✓     |                                 |               |
 | Nhân viên, chấm công, bảng lương, tạm ứng                     | ✓     |                                 |               |
 | Tự vào ca / ra ca (tài khoản gắn với nhân viên)               | ✓     | ✓                               | ✓             |
 | Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ  | ✓     |                                 |               |

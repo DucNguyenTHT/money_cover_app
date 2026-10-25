@@ -10,6 +10,7 @@ import { businessToday, getSettings } from '../settings/settings.service';
 import { stock } from '../inventory/inventory.service';
 import { daily, dashboard } from '../reports/reports.service';
 import * as bank from '../bank/bank.service';
+import * as einvoice from '../einvoice/einvoice.service';
 
 const addDays = (iso: string, n: number) =>
   fromDbDate(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400_000));
@@ -49,7 +50,7 @@ export async function dailyReport(p: DayPreview, closing: DayClosingDto, reclose
     closedBy: closing.closedByName,
     closedAt: closing.closedAt,
     note: closing.note,
-    extra: await bank.dailyLines(p.businessDate),
+    extra: [...(await bank.dailyLines(p.businessDate)), ...(await einvoice.dailyLines(p.businessDate))],
   });
 }
 
@@ -103,6 +104,6 @@ export async function morningDigest(now = new Date()): Promise<string> {
     unclosedDays: unclosed.filter((x) => x !== prev?.day).length,
     backup: d.alerts.backup ? BACKUP_TEXT[d.alerts.backup] : null,
     tax: d.tax,
-    extra: await bank.morningLines(),
+    extra: [...(await bank.morningLines()), ...(await einvoice.morningLines())],
   });
 }

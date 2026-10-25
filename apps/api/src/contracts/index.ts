@@ -21,6 +21,7 @@ import { cashContract } from './cash.contract';
 import { suppliersContract } from './suppliers.contract';
 import { staffContract } from './staff.contract';
 import { bankContract } from './bank.contract';
+import { einvoiceContract } from './einvoice.contract';
 
 const c = initContract();
 
@@ -48,6 +49,7 @@ export const api = c.router({
   suppliers: suppliersContract,
   staff: staffContract,
   bank: bankContract,
+  einvoice: einvoiceContract,
 });
 
 export type Api = typeof api;
@@ -73,3 +75,4 @@ export * from './cash.contract';
 export * from './suppliers.contract';
 export * from './staff.contract';
 export * from './bank.contract';
+export * from './einvoice.contract';

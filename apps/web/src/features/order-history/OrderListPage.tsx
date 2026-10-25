@@ -20,6 +20,7 @@ import { CHANNEL_LABEL, posKeys, useOrder, usePosSettings, whereLabel } from '@/
 import { CancelOrderDialog } from '@/pos/OrderDialogs';
 import { billHtml, printHtml } from '@/pos/print';
 import { DateInput } from '@/components/DateInput';
+import { EInvoiceBox } from '@/components/EInvoiceParts';
 
 const STATUS: Record<OrderStatus, { label: string; tone: 'primary' | 'good' | 'bad' }> = {
   OPEN: { label: 'Đang mở', tone: 'primary' },
@@ -275,6 +276,11 @@ function OrderDetail({ id, inPos, onClose }: { id: number | null; inPos: boolean
       }
     >
       {o && <OrderBody o={o} />}
+      {o && o.status !== 'OPEN' && (
+        <div className="mt-3">
+          <EInvoiceBox order={o} onChanged={() => q.refetch()} />
+        </div>
+      )}
       {o && (
         <CancelOrderDialog
           order={o}

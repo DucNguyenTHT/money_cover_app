@@ -13,6 +13,7 @@ import {
 } from '../domain/enums';
 import { commonErrors, decimalString, isoDate, reason, type RouteMeta } from './common';
 import { dayTransferSchema } from './bank.contract';
+import { buyerSchema, orderEInvoiceSchema } from './einvoice.contract';
 
 const c = initContract();
 const sellers = { roles: ['ADMIN', 'STAFF'] } satisfies RouteMeta;
@@ -110,6 +111,8 @@ export const orderSchema = z.object({
   payments: z.array(paymentSchema),
   /** Money matched to this order on the shop's bank account (bank feed; "0" without one). */
   transferReceived: decimalString,
+  /** E-invoice of the sale (null = none). */
+  einvoice: orderEInvoiceSchema.nullable(),
 });
 export type OrderDto = z.infer<typeof orderSchema>;
 
@@ -209,6 +212,8 @@ export const payInput = z.object({
   /** Required when the order sells below cost (409 BELOW_COST asks for it). */
   belowCostReason: reason.optional(),
   print: z.boolean().default(true),
+  /** E-invoice: `issue` asks for one when the shop issues on demand (always issued in automatic mode). */
+  einvoice: z.object({ issue: z.boolean().optional(), buyer: buyerSchema.optional() }).optional(),
 });
 
 export const ordersContract = c.router(

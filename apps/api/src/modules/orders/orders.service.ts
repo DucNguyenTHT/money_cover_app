@@ -45,6 +45,7 @@ import {
 } from '../inventory/stock-engine';
 import { billTicket, kitchenTicket, printTo } from './print';
 import * as owner from '../notify/notify.service';
+import * as einvoice from '../einvoice/einvoice.service';
 import { belowCostAlert, cancelPaidAlert, discountAlert } from '../../domain/notify/messages';
 
 type Approval = z.infer<typeof approvalSchema>;
@@ -59,6 +60,7 @@ const include = {
   payments: { orderBy: { id: 'asc' } },
   // Money matched on the bank account (bank feed); ignored transactions are never tied to an order.
   bankTransactions: { where: { ignoredAt: null }, select: { amount: true } },
+  einvoices: { orderBy: { id: 'asc' } },
 } as const;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof include }>;
 
@@ -151,6 +153,7 @@ function toDto(o: OrderRow, names: Map<number, string>): OrderDto {
       change: str(p.change),
     })),
     transferReceived: o.bankTransactions.reduce((sum, t) => sum.add(t.amount.toString()), ZERO).toString(),
+    einvoice: einvoice.orderInvoice(o.einvoices),
   };
 }
 
@@ -1088,6 +1091,8 @@ async function issueWasted(tx: Tx, orderId: number, userId: number) {
 
 export async function pay(user: AuthUser, id: number, b: z.infer<typeof payInput>) {
   let sentIds: number[] = [];
+  const buyer = einvoice.buyerOf(b.einvoice?.buyer);
+  let invoiceId: number | null = null;
   await inTx(async (tx) => {
     const o = await loadOpen(tx, id, b.version);
     const date = fromDbDate(o.businessDate);
@@ -1157,7 +1162,14 @@ export async function pay(user: AuthUser, id: number, b: z.infer<typeof payInput
       after: { total: fresh.total.toString(), payments: b.payments, belowCost: below },
       userId: user.id,
     });
+    const inv = await einvoice.queueForPaymentTx(tx, id, !!b.einvoice?.issue, buyer, user.id);
+    invoiceId = inv?.id ?? null;
   });
+  // A few seconds for the e-invoice, so the bill can carry its number / lookup; it carries on in the background.
+  if (invoiceId !== null) {
+    await einvoice.tryNow(invoiceId, 6000).catch(() => undefined);
+    einvoice.kick();
+  }
   const order = await getOrder(id);
   notify(order);
   // Kitchen tickets for lines sent by paying are best-effort; `printed` reports the bill.
@@ -1235,6 +1247,7 @@ export async function cancel(
       },
     });
     if (closing) await tx.dayClosing.update({ where: { id: closing.id }, data: { needsReclose: true } });
+    if (o.status === 'PAID') await einvoice.onOrderCancelledTx(tx, id, user.id);
     if (o.status === 'PAID') {
       const approver = approvedBy
         ? await tx.user.findUnique({ where: { id: approvedBy }, select: { fullName: true } })
@@ -1263,6 +1276,7 @@ export async function cancel(
       approvedById: approvedBy,
     });
   });
+  einvoice.kick();
   const order = await getOrder(id);
   notify(order, { id, tableId });
   const stations = new Set(

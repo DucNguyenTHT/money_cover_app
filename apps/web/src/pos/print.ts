@@ -40,6 +40,25 @@ export async function billHtml(b: BillDto, provisional: boolean): Promise<string
     ? await QRCode.toString(b.qr!, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
     : '';
   const method = { CASH: 'Tiền mặt', TRANSFER: 'Chuyển khoản', CARD: 'Thẻ', APP: 'App' } as const;
+  const inv =
+    !provisional && o.einvoice && ['ISSUED', 'PENDING', 'SENDING'].includes(o.einvoice.status)
+      ? o.einvoice
+      : null;
+  const invQr =
+    inv?.status === 'ISSUED' && inv.lookupUrl
+      ? await QRCode.toString(inv.lookupUrl, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
+      : '';
+  const invoiceBlock = inv
+    ? `<hr><div class="c b">HOÁ ĐƠN ĐIỆN TỬ${inv.provider === 'MOCK' ? ' (GIẢ LẬP)' : ''}</div>${
+        inv.status === 'ISSUED'
+          ? `<div class="c s">Số ${esc(inv.invoiceNo ?? '—')}${inv.series ? ` · Ký hiệu ${esc(inv.series)}` : ''}</div>${
+              inv.lookupCode ? `<div class="c s">Mã tra cứu: ${esc(inv.lookupCode)}</div>` : ''
+            }${invQr ? `<div class="c s">Quét mã để xem hoá đơn</div><div class="qr">${invQr}</div>` : ''}${
+              inv.provider === 'MOCK' ? '<div class="c s">Bản thử — không có giá trị</div>' : ''
+            }`
+          : '<div class="c s">Đang phát hành — in lại bill để xem số</div>'
+      }`
+    : '';
   return `
     <h1>${esc(b.branch.name)}</h1>
     ${b.branch.address ? `<div class="c s">${esc(b.branch.address)}</div>` : ''}
@@ -67,6 +86,7 @@ export async function billHtml(b: BillDto, provisional: boolean): Promise<string
         ${p.method === 'CASH' && p.cashReceived ? `<div class="row s"><span>Khách đưa / tiền thối</span><span>${money(p.cashReceived)} / ${money(p.change)}</span></div>` : ''}`,
       )
       .join('')}
+    ${invoiceBlock}
     ${qr ? `<hr><div class="c s">Quét mã để chuyển khoản</div><div class="qr">${qr}</div><div class="c s">${esc(b.bankAccount ?? '')}</div>` : ''}
     <hr><div class="c s">${esc(b.footer)}</div>`;
 }

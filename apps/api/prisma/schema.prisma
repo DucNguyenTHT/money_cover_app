@@ -159,6 +159,27 @@ enum MatchKind {
   MANUAL
 }
 
+/// Nhà cung cấp hoá đơn điện tử: MOCK = giả lập để thử (không gửi cơ quan thuế), SEPAY = SePay eInvoice.
+enum EInvoiceProvider {
+  MOCK
+  SEPAY
+}
+
+/// PENDING = chờ gửi, SENDING = nhà cung cấp đang xử lý, ISSUED = đã phát hành, FAILED = bị từ chối, CANCELLED = huỷ trước khi gửi.
+enum EInvoiceStatus {
+  PENDING
+  SENDING
+  ISSUED
+  FAILED
+  CANCELLED
+}
+
+/// ORIGINAL = hoá đơn của đơn bán; ADJUSTMENT = hoá đơn điều chỉnh giảm toàn bộ khi đơn đã phát hành bị huỷ.
+enum EInvoiceKind {
+  ORIGINAL
+  ADJUSTMENT
+}
+
 // ---------------------------------------------------------------- catalog & config
 
 /// Cơ sở
@@ -549,6 +570,7 @@ model Order {
   payments         OrderPayment[]
   issues           Issue[]
   bankTransactions BankTransaction[]
+  einvoices        EInvoice[]
 
   @@index([businessDate, status])
   @@index([tableId, status])
@@ -704,6 +726,43 @@ model BankTransaction {
   @@index([branchId, businessDate])
   @@index([orderId])
   @@map("bank_transactions")
+}
+
+/// Hoá đơn điện tử
+/// Hoá đơn khởi tạo từ máy tính tiền của một đơn đã thanh toán, gửi qua nhà cung cấp chọn trong Cài đặt; chờ ở đây và tự gửi lại khi mất mạng. Đơn đã phát hành bị huỷ → một hoá đơn điều chỉnh giảm.
+/// Lưu: đơn, loại (gốc / điều chỉnh), nhà cung cấp, trạng thái, mã tham chiếu gửi nhà cung cấp, mã theo dõi, số hoá đơn, ký hiệu, link / mã tra cứu, số tiền, người mua, số lần thử, lỗi, lần thử sau, lúc phát hành.
+model EInvoice {
+  id            Int              @id @default(autoincrement())
+  branchId      Int              @map("branch_id")
+  orderId       Int              @map("order_id")
+  kind          EInvoiceKind     @default(ORIGINAL)
+  provider      EInvoiceProvider
+  status        EInvoiceStatus   @default(PENDING)
+  /// Our id of the request, sent to the provider: a retried request is never issued twice.
+  referenceCode String           @unique @map("reference_code")
+  trackingCode  String?          @map("tracking_code")
+  invoiceNo     String?          @map("invoice_no")
+  series        String?
+  lookupUrl     String?          @map("lookup_url")
+  lookupCode    String?          @map("lookup_code")
+  amount        Decimal          @db.Decimal(16, 2)
+  /// Company / person who asked for the invoice (null = retail customer).
+  buyer         Json?
+  attempts      Int              @default(0)
+  lastError     String?          @map("last_error")
+  nextAttemptAt DateTime         @default(now()) @map("next_attempt_at") @db.Timestamptz
+  issuedAt      DateTime?        @map("issued_at") @db.Timestamptz
+  /// ADJUSTMENT: the invoice it corrects.
+  originalId    Int?             @map("original_id")
+  createdById   Int?             @map("created_by")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([status, nextAttemptAt])
+  @@index([orderId])
+  @@index([branchId, createdAt])
+  @@map("einvoices")
 }
 
 // ---------------------------------------------------------------- inventory

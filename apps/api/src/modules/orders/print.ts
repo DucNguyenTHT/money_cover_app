@@ -140,6 +140,27 @@ export function billTicket(b: BillDto, paperWidth: number, provisional: boolean)
     if (p.method === 'CASH' && p.cashReceived)
       parts.push(row('  Khach dua', vnd(p.cashReceived)), row('  Tien thoi', vnd(p.change ?? 0)));
   }
+  // E-invoice (hoá đơn khởi tạo từ máy tính tiền): number and where the customer looks it up.
+  const inv = o.einvoice;
+  if (
+    !provisional &&
+    inv &&
+    (inv.status === 'ISSUED' || inv.status === 'PENDING' || inv.status === 'SENDING')
+  ) {
+    parts.push(line, escpos.alignCenter, escpos.boldOn);
+    parts.push(
+      escpos.text(inv.provider === 'MOCK' ? 'HOA DON DIEN TU (GIA LAP)' : 'HOA DON DIEN TU'),
+      escpos.boldOff,
+    );
+    if (inv.status === 'ISSUED') {
+      if (inv.invoiceNo || inv.series)
+        parts.push(escpos.text(`So ${inv.invoiceNo ?? '-'}${inv.series ? ` - Ky hieu ${inv.series}` : ''}`));
+      if (inv.lookupCode) parts.push(escpos.text(`Ma tra cuu: ${inv.lookupCode}`));
+      if (inv.lookupUrl) parts.push(escpos.text('Quet ma de xem hoa don'), qr(inv.lookupUrl));
+      if (inv.provider === 'MOCK') parts.push(escpos.text('Ban thu - khong co gia tri'));
+    } else parts.push(escpos.text('Dang phat hanh - in lai bill de xem so'));
+    parts.push(escpos.alignLeft);
+  }
   if (b.qr && Number(o.total) > 0 && (provisional || o.payments.some((p) => p.method === 'TRANSFER'))) {
     parts.push(
       escpos.alignCenter,

@@ -17,6 +17,7 @@ _Đối chiếu cách app đang xử lý thuế với quy định hiện hành, 
 4. [Thiết kế sơ bộ](#4-thiết-kế-sơ-bộ)
 5. [Giai đoạn 1 đã làm (17/10/2026)](#5-giai-đoạn-1-đã-làm-17102026)
 6. [Câu trả lời của chủ quán](#6-câu-trả-lời-của-chủ-quán)
+7. [Giai đoạn 3 đã làm phần chung (25/10/2026)](#7-giai-đoạn-3-đã-làm-phần-chung-25102026)
 
 ## 1. Hiện trạng trong app
 
@@ -159,3 +160,35 @@ vatRateOn(ngày, lịchThuếSuất) → thuế suất áp dụng cho đơn
 | Đơn app giao hàng    | Quán tự thu, quán tự xuất bill                              | Doanh thu tính thuế = toàn bộ giá bán; chiết khấu app là chi phí (G9 xong) |
 | Hoá đơn điện tử      | Chưa dùng                                                   | Cảnh báo bắt buộc (doanh thu đã trên 1 tỷ); tích hợp ở giai đoạn 3         |
 | Làm giai đoạn 1      | Có                                                          | Đã làm                                                                     |
+
+## 7. Giai đoạn 3 đã làm phần chung (25/10/2026)
+
+Chủ quán chưa chọn nhà cung cấp, nên app làm **toàn bộ phần không phụ thuộc nhà cung cấp** và cho chọn nhà cung cấp
+trong _Hệ thống → Cài đặt → Hoá đơn điện tử_:
+
+| Lựa chọn             | Ý nghĩa                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tắt                  | Không xuất hoá đơn                                                                                                                               |
+| Giả lập (để thử)     | Hoá đơn giả (số `GL…`, bill ghi "giả lập"), không gửi cơ quan thuế — thử cả quy trình trước khi ký hợp đồng                                      |
+| SePay eInvoice       | API công khai, có môi trường thử; SePay nối tới nhà cung cấp hoá đơn bạn đăng ký với họ (link PDF mẫu trong tài liệu của họ trỏ tới M-Invoice)   |
+| Viettel, MISA, VNPT… | Chưa có: các bên này không công bố tài liệu API — khi chọn, xin tài liệu + tài khoản thử, thêm một adapter trong `modules/einvoice/providers.ts` |
+
+**Đã làm:**
+
+- Hai chế độ: _Mọi đơn khi thanh toán_ (đúng cho hộ kinh doanh trên 1 tỷ dùng hoá đơn máy tính tiền) hoặc _Chỉ khi khách lấy_.
+- Màn thanh toán: ô thông tin người mua (tên, MST, địa chỉ, email) khi khách lấy hoá đơn có tên; MST được kiểm tra dạng.
+- Nội dung hoá đơn dựng từ đơn (`domain/einvoice/document.ts`): từng món với giảm giá trên dòng, dòng phụ thu; hộ kinh doanh
+  → hoá đơn bán hàng không ghi thuế suất; công ty → thuế suất của đơn, tiền thuế chia đúng đến đồng. Tổng luôn bằng số khách trả.
+- Hàng đợi `einvoices`: ghi cùng transaction với thanh toán; worker gửi, theo dõi mã tracking tới khi phát hành; mất mạng → chờ
+  và thử lại (1–5–15–60 phút), quá 3 ngày thì báo lỗi. Mỗi lần gửi kèm mã tham chiếu riêng → gửi lại không bao giờ ra hai hoá đơn.
+- Sau khi thanh toán, app chờ tối đa vài giây để bill in kèm **số hoá đơn + QR tra cứu**; chưa kịp thì bill ghi "đang phát hành",
+  in lại sau sẽ có số.
+- Huỷ đơn đã phát hành → hoá đơn **điều chỉnh giảm toàn bộ**; huỷ khi chưa gửi → bỏ hoá đơn đó.
+- Bị nhà cung cấp từ chối → cảnh báo Telegram + chuông; _Kế toán → Hoá đơn điện tử_ liệt kê theo ngày, gửi lại; chi tiết đơn có nút
+  _Xuất hoá đơn_ cho đơn chưa có.
+
+**Lưu ý pháp lý (cập nhật 10/2026):** Nghị định 254/2026/NĐ-CP và Thông tư 91/2026/TT-BTC (hiệu lực 01/7/2026) đưa dịch vụ ăn uống
+bán trực tiếp cho người tiêu dùng vào diện dùng hoá đơn khởi tạo từ máy tính tiền; hộ đã đăng ký hoá đơn có mã / không mã không bắt
+buộc chuyển; hoá đơn sai phải lập **hoá đơn thay thế** (cho phép gộp một hoá đơn điều chỉnh / thay thế kèm bảng kê cho nhiều hoá
+đơn cùng khách trong tháng). App hiện dùng **điều chỉnh giảm** khi huỷ đơn — cần nhà cung cấp / kế toán xác nhận cách đúng với
+loại hoá đơn của quán trước khi dùng thật.
