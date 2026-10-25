@@ -45,6 +45,7 @@ export function IngredientsPage() {
         <span className="flex items-center gap-2">
           {i.name}
           {i.kind === 'PACKAGING' && <Badge tone="primary">Bao bì</Badge>}
+          {i.kind === 'SEMI' && <Badge tone="warn">Bán thành phẩm</Badge>}
           {!i.active && <Badge>Ngừng dùng</Badge>}
         </span>
       ),
@@ -221,6 +222,7 @@ function IngredientForm({
             <Select id={id} {...register('kind')}>
               <option value="INGREDIENT">Nguyên liệu</option>
               <option value="PACKAGING">Bao bì / đồ dùng 1 lần</option>
+              <option value="SEMI">Bán thành phẩm (nước dùng, sốt… tự nấu)</option>
             </Select>
           )}
         </Field>

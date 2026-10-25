@@ -28,6 +28,8 @@ enum Station {
 enum IngredientKind {
   INGREDIENT
   PACKAGING
+  /// Bán thành phẩm (nước dùng, sốt…): nấu theo mẻ từ nguyên liệu, rồi món dùng như một nguyên liệu.
+  SEMI
 }
 
 enum PriceType {
@@ -102,6 +104,8 @@ enum IssueReason {
   DISPOSAL
   SUPPLIER_RETURN
   INTERNAL_USE
+  /// Nguyên liệu đem nấu bán thành phẩm (phiếu chế biến).
+  PRODUCTION
 }
 
 enum StocktakeStatus {
@@ -243,6 +247,9 @@ model Ingredient {
   stocktakeItems StocktakeItem[]
   optionItems    OptionIngredient[]
   orderExtras    OrderItemExtra[]
+  semiRecipes    SemiRecipe[]
+  semiInputs     SemiRecipeItem[]
+  productions    Production[]
 
   @@map("ingredients")
 }
@@ -826,15 +833,76 @@ model Lot {
   qtyRemaining    Decimal  @map("qty_remaining") @db.Decimal(16, 4)
   receiptItemId   Int?     @unique @map("receipt_item_id")
   stocktakeItemId Int?     @map("stocktake_item_id")
+  /// Lot made by a production (bán thành phẩm).
+  productionId    Int?     @unique @map("production_id")
 
   ingredient           Ingredient            @relation(fields: [ingredientId], references: [id])
   receiptItem          ReceiptItem?          @relation(fields: [receiptItemId], references: [id])
   stocktakeItem        StocktakeItem?        @relation(fields: [stocktakeItemId], references: [id])
+  production           Production?           @relation(fields: [productionId], references: [id])
   issueAllocations     IssueAllocation[]
   stocktakeAllocations StocktakeAllocation[]
 
   @@index([branchId, ingredientId, date])
   @@map("lots")
+}
+
+/// Công thức chế biến
+/// Nguyên liệu để nấu một mẻ bán thành phẩm (vd 10 kg xương + 0,5 kg gia vị → 40 lít nước dùng); có phiên bản theo ngày.
+/// Lưu: bán thành phẩm, ngày hiệu lực, sản lượng một mẻ (đơn vị kho), ghi chú.
+model SemiRecipe {
+  id            Int      @id @default(autoincrement())
+  ingredientId  Int      @map("ingredient_id")
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  yieldQty      Decimal  @map("yield_qty") @db.Decimal(16, 4)
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  ingredient Ingredient       @relation(fields: [ingredientId], references: [id])
+  items      SemiRecipeItem[]
+
+  @@unique([ingredientId, effectiveFrom])
+  @@map("semi_recipes")
+}
+
+/// Dòng công thức chế biến
+/// Lượng một nguyên liệu cho một mẻ bán thành phẩm.
+/// Lưu: công thức, nguyên liệu, số lượng (đơn vị kho).
+model SemiRecipeItem {
+  id           Int     @id @default(autoincrement())
+  recipeId     Int     @map("recipe_id")
+  ingredientId Int     @map("ingredient_id")
+  qty          Decimal @db.Decimal(16, 4)
+
+  recipe     SemiRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([recipeId, ingredientId])
+  @@map("semi_recipe_items")
+}
+
+/// Phiếu chế biến
+/// Một lần nấu bán thành phẩm: xuất nguyên liệu (FIFO) và nhập một lô thành phẩm có giá vốn = tiền nguyên liệu ÷ số lượng thu được.
+/// Lưu: ngày, bán thành phẩm, số lượng thu được, giá vốn, phiếu xuất nguyên liệu, ghi chú, người tạo.
+model Production {
+  id           Int      @id @default(autoincrement())
+  branchId     Int      @map("branch_id")
+  date         DateTime @db.Date
+  ingredientId Int      @map("ingredient_id")
+  qty          Decimal  @db.Decimal(16, 4)
+  costTotal    Decimal  @map("cost_total") @db.Decimal(16, 2)
+  unitCost     Decimal  @map("unit_cost") @db.Decimal(16, 4)
+  /// The PRODUCTION issue that took the inputs out of stock.
+  issueId      Int      @unique @map("issue_id")
+  note         String?
+  createdById  Int      @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  lot        Lot?
+
+  @@index([branchId, date])
+  @@map("productions")
 }
 
 /// Phiếu xuất

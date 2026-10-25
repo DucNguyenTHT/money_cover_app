@@ -29,6 +29,11 @@ export const REASON: Record<IssueReason, { label: string; tone: BadgeTone; hint?
     tone: 'neutral',
     hint: 'Cơm nhân viên, biếu tặng — tính vào chi phí khác',
   },
+  PRODUCTION: {
+    label: 'Xuất chế biến',
+    tone: 'primary',
+    hint: 'Nguyên liệu nấu bán thành phẩm — do phiếu chế biến tạo',
+  },
 };
 type Manual = IssueInput['reason'];
 
@@ -101,7 +106,7 @@ export function IssuesPage() {
       </Card>
       {creating && (
         <IssueForm
-          defaultReason={reason && reason !== 'SALE_USE' ? reason : 'DISPOSAL'}
+          defaultReason={reason && reason !== 'SALE_USE' && reason !== 'PRODUCTION' ? reason : 'DISPOSAL'}
           defaultMonth={month}
           onClose={() => setCreating(false)}
         />
@@ -320,7 +325,7 @@ function IssueView({ id, onClose }: { id: number; onClose: () => void }) {
     queryFn: async () => ok(await client.inventory.getIssue({ params: { id } })),
   });
   const r = issue.data;
-  const canDelete = r && !r.locked && r.reason !== 'SALE_USE' && !r.orderId;
+  const canDelete = r && !r.locked && r.reason !== 'SALE_USE' && r.reason !== 'PRODUCTION' && !r.orderId;
   return (
     <Dialog
       open

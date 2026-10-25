@@ -25,6 +25,7 @@ import type {
   PricingRow,
 } from '../../contracts/pricing.contract';
 import { businessToday, getSettings } from '../settings/settings.service';
+import { costPrices } from '../production/production.service';
 
 const str = (d: Prisma.Decimal | ReturnType<typeof D> | null) => (d === null ? null : d.toString());
 const dto = (c: ChannelCost): ChannelCostDto => ({
@@ -109,16 +110,8 @@ async function context(appId?: number): Promise<PricingContext & { apps: AppInfo
   };
 }
 
-/** Latest lot price per ingredient (per stock unit). */
-async function latestPrices() {
-  const lots = await prisma.lot.findMany({
-    where: { branchId: await defaultBranchId() },
-    orderBy: [{ date: 'desc' }, { id: 'desc' }],
-    distinct: ['ingredientId'],
-    select: { ingredientId: true, unitPrice: true },
-  });
-  return new Map(lots.map((l) => [l.ingredientId, l.unitPrice.toString()]));
-}
+/** Price per stock unit: latest lot price; semi-finished goods = their recipe at the latest input prices. */
+const latestPrices = costPrices;
 
 async function buildRows(
   ctx: PricingContext & { apps: AppInfo[] },

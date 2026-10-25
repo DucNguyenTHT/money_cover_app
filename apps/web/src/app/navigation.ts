@@ -10,6 +10,7 @@ import {
   Boxes,
   Calculator,
   ChefHat,
+  CookingPot,
   ClipboardList,
   Coins,
   Contact,
@@ -107,6 +108,7 @@ export const NAV: NavModule[] = [
         items: [
           { label: 'Phiếu nhập', icon: Receipt, path: '/admin/inventory/receipts' },
           { label: 'Cần nhập hàng', icon: PackageSearch, path: '/admin/inventory/reorder' },
+          { label: 'Chế biến', icon: CookingPot, path: '/admin/inventory/productions' },
           { label: 'Nhà cung cấp & công nợ', icon: Truck, path: '/admin/inventory/suppliers' },
           {
             label: 'Phiếu xuất',

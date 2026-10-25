@@ -464,6 +464,11 @@ function flowsSection() {
       ],
       ['Ảnh hoá đơn', 'đính kèm ngay khi nhập (tuỳ chọn)', 'documents.receipt_id'],
       [
+        'Chế biến',
+        'bán thành phẩm (nước dùng, sốt): xuất nguyên liệu FIFO, nhập một lô thành phẩm giá = tiền nguyên liệu ÷ số lượng thu được; công thức một mẻ định giá món',
+        'productions · semi_recipes · lots.production_id · issues PRODUCTION',
+      ],
+      [
         'Xuất kho',
         'huỷ / trả NCC / dùng nội bộ, lấy lô cũ trước',
         'issues · issue_items · issue_allocations',

@@ -60,6 +60,10 @@ const adminScreens: Record<string, Pick<RouteObject, 'lazy'> & { staff?: boolean
     ...lazyComponent(() => import('@/features/inventory/ReorderPage'), 'ReorderPage'),
     staff: true,
   },
+  'inventory/productions': {
+    ...lazyComponent(() => import('@/features/production/ProductionsPage'), 'ProductionsPage'),
+    staff: true,
+  },
   'inventory/suppliers': {
     ...lazyComponent(() => import('@/features/inventory/SuppliersPage'), 'SuppliersPage'),
     staff: true,

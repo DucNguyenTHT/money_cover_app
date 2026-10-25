@@ -248,6 +248,8 @@ export function StockMovementPage() {
     'returned',
     'internal',
     'shortage',
+    'produced',
+    'usedInProduction',
     'closing',
   ] as const;
   const heads = [
@@ -259,6 +261,8 @@ export function StockMovementPage() {
     'Trả NCC',
     'Nội bộ',
     'Thiếu KK',
+    'Chế biến ra',
+    'Đem chế biến',
     'Tồn cuối',
   ];
   const sumV = (k: (typeof cols)[number]) => rows.reduce((s, r) => s + Number(r[k].value), 0);
@@ -270,7 +274,9 @@ export function StockMovementPage() {
     sumV('disposed') -
     sumV('returned') -
     sumV('internal') -
-    sumV('shortage') -
+    sumV('shortage') +
+    sumV('produced') -
+    sumV('usedInProduction') -
     sumV('closing');
 
   return (
@@ -311,7 +317,7 @@ export function StockMovementPage() {
       </div>
       <Card>
         <ReportTable
-          minWidth={1100}
+          minWidth={1300}
           head={['Nguyên liệu', ...heads]}
           rows={rows.map((r) => [
             <span key="n">

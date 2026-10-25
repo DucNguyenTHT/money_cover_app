@@ -170,6 +170,9 @@ async function writeReceipt(
   for (const line of input.items) {
     const ing = ings.find((i) => i.id === line.ingredientId);
     if (!ing) throw badRequest('Nguyên liệu không tồn tại');
+    // A semi-finished good is cooked, not bought (its opening stock is fine).
+    if (ing.kind === 'SEMI' && input.kind === 'PURCHASE')
+      throw badRequest(`${ing.name} là bán thành phẩm — ghi bằng phiếu chế biến, không nhập mua`);
     const usePurchase = line.unitMode === 'PURCHASE' && ing.purchaseUnit;
     const conv = usePurchase
       ? toStockUnits(line.qty, line.unitPrice, ing.purchaseFactor.toString())
@@ -379,6 +382,8 @@ export async function deleteIssue(userId: number, id: number, reason: string) {
   if (before.reason === 'SALE_USE' || before.orderId) {
     throw badRequest('Phiếu tiêu hao do bán hàng tự sinh — huỷ đơn hàng để hoàn kho');
   }
+  if (before.reason === 'PRODUCTION')
+    throw badRequest('Phiếu xuất chế biến — xoá phiếu chế biến để hoàn kho');
   await inTx(async (tx) => {
     await assertPeriodOpen(tx, before.date);
     await deleteIssueRestoringLots(tx, id);

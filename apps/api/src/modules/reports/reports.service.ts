@@ -666,6 +666,8 @@ export async function stockMovement(from: string, to: string): Promise<StockMove
         const closeQ = D(m(r.open_q))
           .add(m(r.in_q))
           .add(m(r.surplus_q))
+          .add(m(r.prod_in_q))
+          .sub(m(r.prod_out_q))
           .sub(m(r.sale_q))
           .sub(m(r.disposal_q))
           .sub(m(r.return_q))
@@ -674,6 +676,8 @@ export async function stockMovement(from: string, to: string): Promise<StockMove
         const closeV = D(m(r.open_v))
           .add(m(r.in_v))
           .add(m(r.surplus_v))
+          .add(m(r.prod_in_v))
+          .sub(m(r.prod_out_v))
           .sub(m(r.sale_v))
           .sub(m(r.disposal_v))
           .sub(m(r.return_v))
@@ -692,6 +696,8 @@ export async function stockMovement(from: string, to: string): Promise<StockMove
           returned: mv(r.return_q, r.return_v),
           internal: mv(r.internal_q, r.internal_v),
           shortage: mv(r.short_q, r.short_v),
+          produced: mv(r.prod_in_q, r.prod_in_v),
+          usedInProduction: mv(r.prod_out_q, r.prod_out_v),
           closing: { qty: closeQ.toDecimalPlaces(4).toString(), value: roundVnd(closeV).toString() },
         };
       })
@@ -705,6 +711,8 @@ export async function stockMovement(from: string, to: string): Promise<StockMove
           r.returned,
           r.internal,
           r.shortage,
+          r.produced,
+          r.usedInProduction,
           r.closing,
         ].some((x) => Number(x.qty) !== 0 || Number(x.value) !== 0),
       ),

@@ -34,7 +34,8 @@ export function ReorderPage() {
   const rows = useMemo(
     () =>
       (stock.data ?? [])
-        .filter((r) => r.status !== 'OK')
+        // Semi-finished goods are cooked, not bought (Kho → Chế biến).
+        .filter((r) => r.status !== 'OK' && r.kind !== 'SEMI')
         .sort((a, b) =>
           a.status === b.status ? (a.daysLeft ?? 0) - (b.daysLeft ?? 0) : a.status === 'OUT' ? -1 : 1,
         ),

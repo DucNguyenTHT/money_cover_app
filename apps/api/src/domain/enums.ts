@@ -8,7 +8,8 @@ export type Role = (typeof ROLES)[number];
 export const STATIONS = values('KITCHEN', 'BAR');
 export type Station = (typeof STATIONS)[number];
 
-export const INGREDIENT_KINDS = values('INGREDIENT', 'PACKAGING');
+/** SEMI = bán thành phẩm (broth, sauce): cooked from ingredients in batches, then used by dishes. */
+export const INGREDIENT_KINDS = values('INGREDIENT', 'PACKAGING', 'SEMI');
 export type IngredientKind = (typeof INGREDIENT_KINDS)[number];
 
 export const PRICE_TYPES = values('STORE', 'APP');
@@ -47,7 +48,8 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const RECEIPT_KINDS = values('PURCHASE', 'OPENING');
 export type ReceiptKind = (typeof RECEIPT_KINDS)[number];
 
-export const ISSUE_REASONS = values('SALE_USE', 'DISPOSAL', 'SUPPLIER_RETURN', 'INTERNAL_USE');
+/** PRODUCTION = ingredients cooked into a semi-finished good (made by a production, never by hand). */
+export const ISSUE_REASONS = values('SALE_USE', 'DISPOSAL', 'SUPPLIER_RETURN', 'INTERNAL_USE', 'PRODUCTION');
 export type IssueReason = (typeof ISSUE_REASONS)[number];
 
 export const STOCKTAKE_STATUSES = values('DRAFT', 'DONE', 'CANCELLED');

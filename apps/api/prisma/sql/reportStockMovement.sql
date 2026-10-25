@@ -1,4 +1,5 @@
 -- Nhập – xuất – tồn per ingredient: opening, movements in the period, closing (quantity and value).
+-- Productions (bán thành phẩm): the output lot is "produced" in, the inputs "used for production" out.
 -- @param {Int} $1:branchId
 -- @param {DateTime} $2:from
 -- @param {DateTime} $3:to
@@ -9,7 +10,9 @@ WITH lots_p AS (
     SUM(qty_in) FILTER (WHERE date BETWEEN $2::date AND $3::date AND receipt_item_id IS NOT NULL) AS in_q,
     SUM(qty_in * unit_price) FILTER (WHERE date BETWEEN $2::date AND $3::date AND receipt_item_id IS NOT NULL) AS in_v,
     SUM(qty_in) FILTER (WHERE date BETWEEN $2::date AND $3::date AND stocktake_item_id IS NOT NULL) AS surplus_q,
-    SUM(qty_in * unit_price) FILTER (WHERE date BETWEEN $2::date AND $3::date AND stocktake_item_id IS NOT NULL) AS surplus_v
+    SUM(qty_in * unit_price) FILTER (WHERE date BETWEEN $2::date AND $3::date AND stocktake_item_id IS NOT NULL) AS surplus_v,
+    SUM(qty_in) FILTER (WHERE date BETWEEN $2::date AND $3::date AND production_id IS NOT NULL) AS prod_in_q,
+    SUM(qty_in * unit_price) FILTER (WHERE date BETWEEN $2::date AND $3::date AND production_id IS NOT NULL) AS prod_in_v
   FROM lots WHERE branch_id = $1 GROUP BY ingredient_id
 ), out_p AS (
   SELECT ii.ingredient_id,
@@ -22,7 +25,9 @@ WITH lots_p AS (
     SUM(ii.qty) FILTER (WHERE s.date BETWEEN $2::date AND $3::date AND s.reason = 'SUPPLIER_RETURN') AS return_q,
     SUM(ii.cost_total) FILTER (WHERE s.date BETWEEN $2::date AND $3::date AND s.reason = 'SUPPLIER_RETURN') AS return_v,
     SUM(ii.qty) FILTER (WHERE s.date BETWEEN $2::date AND $3::date AND s.reason = 'INTERNAL_USE') AS internal_q,
-    SUM(ii.cost_total) FILTER (WHERE s.date BETWEEN $2::date AND $3::date AND s.reason = 'INTERNAL_USE') AS internal_v
+    SUM(ii.cost_total) FILTER (WHERE s.date BETWEEN $2::date AND $3::date AND s.reason = 'INTERNAL_USE') AS internal_v,
+    SUM(ii.qty) FILTER (WHERE s.date BETWEEN $2::date AND $3::date AND s.reason = 'PRODUCTION') AS prod_out_q,
+    SUM(ii.cost_total) FILTER (WHERE s.date BETWEEN $2::date AND $3::date AND s.reason = 'PRODUCTION') AS prod_out_v
   FROM issue_items ii JOIN issues s ON s.id = ii.issue_id
   WHERE s.branch_id = $1 GROUP BY ii.ingredient_id
 ), short_p AS (
@@ -45,6 +50,8 @@ SELECT i.id AS ingredient_id, i.code, i.name, i.unit,
   COALESCE(o.disposal_q, 0) AS disposal_q, COALESCE(o.disposal_v, 0) AS disposal_v,
   COALESCE(o.return_q, 0) AS return_q, COALESCE(o.return_v, 0) AS return_v,
   COALESCE(o.internal_q, 0) AS internal_q, COALESCE(o.internal_v, 0) AS internal_v,
+  COALESCE(l.prod_in_q, 0) AS prod_in_q, COALESCE(l.prod_in_v, 0) AS prod_in_v,
+  COALESCE(o.prod_out_q, 0) AS prod_out_q, COALESCE(o.prod_out_v, 0) AS prod_out_v,
   COALESCE(sp.short_q, 0) AS short_q, COALESCE(sp.short_v, 0) AS short_v
 FROM ingredients i
 LEFT JOIN lots_p l ON l.ingredient_id = i.id

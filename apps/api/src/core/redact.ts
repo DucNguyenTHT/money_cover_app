@@ -12,6 +12,9 @@ const SENSITIVE = new Set([
   'lossValue',
   'lossTotal',
   'dishAllocations',
+  'theoreticalUnitCost',
+  'lastUnitCost',
+  'estimatedCost',
 ]);
 
 /** Deep-copy `value` without cost/profit fields unless the viewer is ADMIN. */

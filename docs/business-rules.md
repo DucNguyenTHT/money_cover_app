@@ -44,6 +44,23 @@ Các công thức nằm trong `apps/api/src/domain` (có unit test). Tài liệu
   _Sắp hết_ khi dưới tồn tối thiểu hoặc không đủ dùng `reorder_days` ngày (mặc định 3). Gợi ý nhập = đủ
   max(tồn tối thiểu, lượng dùng × số ngày), làm tròn lên theo đơn vị mua (thùng, bao…).
 
+## Bán thành phẩm (nước dùng, sốt…)
+
+- Nguyên liệu loại **Bán thành phẩm** (vd _Nước dùng bò_, đơn vị lít, định mức ml) có **công thức một mẻ** theo ngày hiệu lực:
+  nguyên liệu (đơn vị kho) → sản lượng một mẻ. Món dùng bán thành phẩm trong định mức như nguyên liệu thường.
+- **Phiếu chế biến** (Kho → Chế biến): bán thành phẩm, số lượng **thu được thật**, ngày nấu, nguyên liệu (điền theo công thức
+  rồi sửa được). Nguyên liệu xuất FIFO (phiếu xuất "Xuất chế biến"), phải **có trong kho vào ngày nấu** (nhập phiếu nhập trước);
+  thành phẩm vào kho thành **một lô** giá vốn = tiền nguyên liệu ÷ số lượng thu được. Món bán trước khi ghi phiếu (nợ kho
+  nước dùng) được tính lại giá vốn theo mẻ đó.
+- Không lồng nhau: nguyên liệu chế biến không được là bán thành phẩm. Bán thành phẩm không nhập mua (tồn đầu thì được),
+  không có trong _Cần nhập hàng_; có trong kiểm kê, phân bổ hao hụt vào món như nguyên liệu thường.
+- **Giá vốn trong Bảng tính giá** = công thức × giá nhập mới nhất ÷ sản lượng một mẻ (giá xương tăng → món dùng nước dùng
+  báo ngay); chưa có công thức thì lấy giá lô gần nhất.
+- Xoá phiếu chế biến (có lý do): chỉ khi lô thành phẩm chưa dùng tới; hoàn nguyên liệu về đúng lô. Nhân viên xoá được phiếu
+  mình tạo trong ngày, còn lại ADMIN. Phiếu xuất chế biến không xoá riêng được.
+- Báo cáo Nhập – xuất – tồn có cột _Chế biến ra_ (thành phẩm) và _Đem chế biến_ (nguyên liệu); lãi lỗ không đổi (chế biến
+  chỉ chuyển giá trị trong kho).
+
 ## Sổ quỹ tiền mặt
 
 - Ghi tiền bỏ vào / lấy ra khỏi két **ngoài bán hàng**: tiền lẻ đầu ngày, chi chợ, nộp ngân hàng… Không ghi cho ngày

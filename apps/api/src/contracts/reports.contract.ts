@@ -208,6 +208,10 @@ export const stockMovementSchema = z.object({
       returned: mv,
       internal: mv,
       shortage: mv,
+      /** Semi-finished goods made (lots of productions). */
+      produced: mv,
+      /** Ingredients cooked into semi-finished goods. */
+      usedInProduction: mv,
       closing: mv,
     }),
   ),
