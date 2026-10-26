@@ -10,6 +10,7 @@ import {
   PAYMENT_METHODS,
   STATIONS,
   VAT_MODES,
+  DEPOSIT_OUTCOMES,
 } from '../domain/enums';
 import { commonErrors, decimalString, isoDate, reason, type RouteMeta } from './common';
 import { dayTransferSchema } from './bank.contract';
@@ -121,6 +122,16 @@ export const orderSchema = z.object({
   customer: z.object({ id: z.number(), name: z.string(), phone: z.string(), points: z.number() }).nullable(),
   pointsRedeemed: z.number(),
   pointsDiscount: decimalString,
+  /** Booking the order was opened from, with its deposit (counted towards the bill when paid). */
+  reservation: z
+    .object({
+      id: z.number(),
+      name: z.string(),
+      deposit: decimalString,
+      depositMethod: z.enum(['CASH', 'TRANSFER']).nullable(),
+      depositOutcome: z.enum(DEPOSIT_OUTCOMES).nullable(),
+    })
+    .nullable(),
   pointsEarned: z.number(),
 });
 export type OrderDto = z.infer<typeof orderSchema>;
@@ -210,6 +221,8 @@ export const openOrderInput = z.object({
   guestCount: z.number().int().min(1).max(200),
   note: z.string().trim().max(200).nullable(),
   items: z.array(newItem).default([]),
+  /** Opening the order of a booking (the guests arrived). */
+  reservationId: z.number().int().nullable().optional(),
 });
 
 export const payInput = z.object({

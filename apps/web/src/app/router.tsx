@@ -90,6 +90,10 @@ const adminScreens: Record<string, Pick<RouteObject, 'lazy'> & { staff?: boolean
     ...lazyComponent(() => import('@/features/customers/CustomersPage'), 'CustomersPage'),
     staff: true,
   },
+  reservations: {
+    ...lazyComponent(() => import('@/features/reservations/ReservationsPage'), 'ReservationsPage'),
+    staff: true,
+  },
   orders: lazyComponent(() => import('@/features/order-history/OrderListPage'), 'OrderListPage'),
   'orders/day-closings': lazyComponent(
     () => import('@/features/day-closing/DayClosingPage'),
@@ -168,6 +172,10 @@ export const router = createBrowserRouter([
           {
             path: 'orders',
             ...lazyComponent(() => import('@/features/order-history/OrderListPage'), 'PosOrderListPage'),
+          },
+          {
+            path: 'reservations',
+            ...lazyComponent(() => import('@/features/reservations/ReservationsPage'), 'PosReservationsPage'),
           },
           {
             path: 'cash',

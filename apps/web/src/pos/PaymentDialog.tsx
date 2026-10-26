@@ -43,6 +43,13 @@ export function PaymentDialog({
   onPaid: (o: OrderDto) => void;
 }) {
   const total = Number(order.total);
+  // Deposit of the booking the order came from: it has to sit inside the cash / transfer line (server checks).
+  const dep =
+    order.reservation && Number(order.reservation.deposit) > 0 && !order.reservation.depositOutcome
+      ? order.reservation
+      : null;
+  const cashDep = dep?.depositMethod === 'CASH' ? Number(dep.deposit) : 0;
+  const transferDep = dep?.depositMethod === 'TRANSFER' ? Math.min(Number(dep.deposit), total) : 0;
   const settings = usePosSettings().data?.settings;
   const toast = useToast();
   const [lines, setLines] = useState<Line[]>([]);
@@ -66,14 +73,21 @@ export function PaymentDialog({
     setLines(
       order.channel === 'APP'
         ? [{ method: 'APP', amount: String(total), cashReceived: '' }]
-        : got >= total
-          ? [{ method: 'TRANSFER', amount: String(total), cashReceived: '' }]
-          : got > 0
-            ? [
-                { method: 'TRANSFER', amount: String(got), cashReceived: '' },
-                { method: 'CASH', amount: String(total - got), cashReceived: '' },
-              ]
-            : [{ method: 'CASH', amount: String(total), cashReceived: '' }],
+        : transferDep > 0
+          ? [
+              { method: 'TRANSFER', amount: String(transferDep), cashReceived: '' },
+              ...(total > transferDep
+                ? [{ method: 'CASH' as const, amount: String(total - transferDep), cashReceived: '' }]
+                : []),
+            ]
+          : got >= total
+            ? [{ method: 'TRANSFER', amount: String(total), cashReceived: '' }]
+            : got > 0
+              ? [
+                  { method: 'TRANSFER', amount: String(got), cashReceived: '' },
+                  { method: 'CASH', amount: String(total - got), cashReceived: '' },
+                ]
+              : [{ method: 'CASH', amount: String(total), cashReceived: '' }],
     );
     setBelowCost(null);
     setError(null);
@@ -87,24 +101,28 @@ export function PaymentDialog({
   const paid = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const left = total - paid;
   const cash = lines.find((l) => l.method === 'CASH');
-  const change = cash && cash.cashReceived ? Number(cash.cashReceived) - Number(cash.amount || 0) : 0;
+  // With a cash deposit the guests hand over only the rest: "Khách đưa" is what they give now.
+  const handed = (Number(cash?.cashReceived) || 0) + cashDep;
+  const change = cash && (cash.cashReceived || cashDep) ? Math.max(0, handed - Number(cash.amount || 0)) : 0;
   const transfer = lines.find((l) => l.method === 'TRANSFER');
+  // A transfer deposit is already on the account: the QR asks only for the rest.
+  const transferDue = transfer ? Number(transfer.amount || 0) - transferDep : 0;
 
   const qrPayload = useMemo(() => {
     if (
       !transfer ||
       !settings ||
       !vietQrConfigured(settings.bank_bin, settings.bank_account_no) ||
-      !Number(transfer.amount)
+      transferDue <= 0
     )
       return null;
     return vietQrPayload({
       bin: settings.bank_bin,
       accountNo: settings.bank_account_no,
-      amount: Number(transfer.amount),
+      amount: transferDue,
       purpose: order.code,
     });
-  }, [transfer, settings, order.code]);
+  }, [transfer, transferDue, settings, order.code]);
 
   useEffect(() => {
     if (!qrPayload) return setQrSvg('');
@@ -116,7 +134,7 @@ export function PaymentDialog({
   // Bank feed: while the QR is shown, the server reads the bank more often and pushes the order when money
   // arrives (order.transferReceived then grows).
   const [feed, setFeed] = useState(false);
-  const transferAmount = transfer && Number(transfer.amount) > 0 ? transfer.amount : null;
+  const transferAmount = transferDue > 0 ? String(transferDue) : null;
   useEffect(() => {
     if (!open || !transferAmount) return;
     let alive = true;
@@ -177,7 +195,14 @@ export function PaymentDialog({
               .map((l) => ({
                 method: l.method,
                 amount: l.amount,
-                cashReceived: l.method === 'CASH' && l.cashReceived ? l.cashReceived : null,
+                cashReceived:
+                  l.method !== 'CASH'
+                    ? null
+                    : l.cashReceived
+                      ? String(Number(l.cashReceived) + cashDep)
+                      : cashDep > Number(l.amount)
+                        ? String(cashDep)
+                        : null,
               })),
           },
         }),
@@ -202,8 +227,10 @@ export function PaymentDialog({
   const canPay =
     left === 0 &&
     lines.every(
-      (l) => l.method !== 'CASH' || !l.cashReceived || Number(l.cashReceived) >= Number(l.amount),
+      (l) => l.method !== 'CASH' || !l.cashReceived || Number(l.cashReceived) + cashDep >= Number(l.amount),
     ) &&
+    (cashDep === 0 || Number(cash?.amount || 0) >= Math.min(cashDep, total)) &&
+    (transferDep === 0 || Number(transfer?.amount || 0) >= transferDep) &&
     (belowCost === null || belowCost.trim().length >= 5);
 
   return (
@@ -238,6 +265,18 @@ export function PaymentDialog({
         className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-[minmax(0,1fr)_260px]"
       >
         <div className="flex min-w-0 flex-col gap-4">
+          {dep && (
+            <p className="rounded-ctl bg-good-soft px-3 py-2 text-[13px] text-good">
+              {dep.name} đã cọc <b className="num">{money(dep.deposit)}</b>{' '}
+              {cashDep ? 'tiền mặt (đã vào két hôm nhận cọc)' : 'chuyển khoản'}.{' '}
+              {Number(dep.deposit) >= total
+                ? `Cọc đủ bill${Number(dep.deposit) > total ? ` — ${cashDep ? 'thối' : 'chuyển khoản trả'} lại khách ${money(Number(dep.deposit) - total)}` : ''}.`
+                : `Khách trả thêm ${money(total - Number(dep.deposit))}.`}{' '}
+              {cashDep
+                ? 'Dòng Tiền mặt giữ đủ số tiền cọc; app tự ghi chi "Trừ tiền cọc" ở sổ quỹ.'
+                : 'Dòng Chuyển khoản gồm tiền cọc (không cần quét lại).'}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             {METHODS.map((m) => {
               const on = lines.some((l) => l.method === m.value);
@@ -284,7 +323,7 @@ export function PaymentDialog({
                     <input
                       inputMode="numeric"
                       value={fmtInput(l.cashReceived)}
-                      placeholder={money(l.amount)}
+                      placeholder={money(Math.max(0, Number(l.amount) - cashDep))}
                       onChange={(e) => setLine(i, { cashReceived: digits(e.target.value) })}
                       className="num h-10 rounded-ctl border border-field bg-white px-3 text-right text-[15px] font-semibold text-ink"
                     />
@@ -303,7 +342,7 @@ export function PaymentDialog({
             ))}
             {cash && (
               <div className="flex flex-wrap gap-2">
-                {cashSuggestions(cash.amount || 0).map((v) => (
+                {cashSuggestions(Math.max(0, Number(cash.amount || 0) - cashDep)).map((v) => (
                   <button
                     key={v.toString()}
                     type="button"

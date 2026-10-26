@@ -191,6 +191,19 @@ enum PromotionKind {
   COMBO
 }
 
+enum ReservationStatus {
+  BOOKED
+  ARRIVED
+  CANCELLED
+  NO_SHOW
+}
+
+enum DepositOutcome {
+  USED
+  REFUNDED
+  KEPT
+}
+
 /// ORIGINAL = hoá đơn của đơn bán; ADJUSTMENT = hoá đơn điều chỉnh giảm toàn bộ khi đơn đã phát hành bị huỷ.
 enum EInvoiceKind {
   ORIGINAL
@@ -464,8 +477,9 @@ model DiningTable {
   sort   Int     @default(0)
   active Boolean @default(true)
 
-  area   Area    @relation(fields: [areaId], references: [id])
-  orders Order[]
+  area         Area          @relation(fields: [areaId], references: [id])
+  orders       Order[]
+  reservations Reservation[]
 
   @@map("tables")
 }
@@ -603,6 +617,7 @@ model Order {
   bankTransactions BankTransaction[]
   einvoices        EInvoice[]
   customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  reservation      Reservation?
 
   @@index([businessDate, status])
   @@index([tableId, status])
@@ -754,6 +769,7 @@ model Customer {
 
   orders       Order[]
   pointEntries PointEntry[]
+  reservations Reservation[]
 
   @@index([name])
   @@map("customers")
@@ -805,6 +821,41 @@ model PromotionItem {
 
   @@index([promotionId])
   @@map("promotion_items")
+}
+
+/// Đặt bàn
+/// Khách đặt trước: giờ đến, số khách, bàn, tiền cọc. Khách đến thì mở đơn từ đặt bàn; tiền cọc trừ vào đơn khi thanh toán.
+/// Lưu: tên, điện thoại, khách quen, số khách, giờ đến, thời lượng, bàn, ghi chú, tiền cọc (cách nhận, đã dùng / hoàn / giữ), trạng thái, đơn.
+model Reservation {
+  id             Int               @id @default(autoincrement())
+  branchId       Int               @map("branch_id")
+  name           String
+  phone          String?
+  customerId     Int?              @map("customer_id")
+  guests         Int
+  reservedAt     DateTime          @map("reserved_at") @db.Timestamptz
+  /// Ngày kinh doanh của giờ đến.
+  businessDate   DateTime          @map("business_date") @db.Date
+  durationMin    Int               @default(120) @map("duration_min")
+  tableId        Int?              @map("table_id")
+  note           String?
+  deposit        Decimal           @default(0) @db.Decimal(16, 2)
+  /// Tiền mặt: tự ghi thu vào sổ quỹ ngày nhận cọc. Chuyển khoản: không vào két.
+  depositMethod  PaymentMethod?    @map("deposit_method")
+  depositOutcome DepositOutcome?   @map("deposit_outcome")
+  status         ReservationStatus @default(BOOKED)
+  orderId        Int?              @unique @map("order_id")
+  cancelReason   String?           @map("cancel_reason")
+  createdById    Int               @map("created_by")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  customer Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  table    DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  order    Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([branchId, businessDate])
+  @@map("reservations")
 }
 
 /// Lịch sử điểm

@@ -104,6 +104,12 @@ export type PointKind = (typeof POINT_KINDS)[number];
 export const PROMOTION_KINDS = values('TIME', 'COMBO');
 export type PromotionKind = (typeof PROMOTION_KINDS)[number];
 
+export const RESERVATION_STATUSES = values('BOOKED', 'ARRIVED', 'CANCELLED', 'NO_SHOW');
+export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
+
+export const DEPOSIT_OUTCOMES = values('USED', 'REFUNDED', 'KEPT');
+export type DepositOutcome = (typeof DEPOSIT_OUTCOMES)[number];
+
 export const EINVOICE_KINDS = values('ORIGINAL', 'ADJUSTMENT');
 export type EInvoiceKind = (typeof EINVOICE_KINDS)[number];
 

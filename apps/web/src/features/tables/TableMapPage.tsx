@@ -10,11 +10,14 @@ import { dateVi, money } from '@/lib/format';
 import { useBusinessToday } from '@/lib/business-date';
 import { cn } from '@/lib/cn';
 import { usePos } from '@/pos/context';
-import { minutesSince, useDeliveryApps, useFloor, whereLabel } from '@/pos/data';
+import { minutesSince, useDeliveryApps, useFloor, useReservations, whereLabel } from '@/pos/data';
 import { OrderPanel } from '@/pos/OrderPanel';
 
 type Filter = 'all' | 'used' | 'free';
 const OTHERS = -1;
+
+/** "19:30" shop time. */
+const shopTime = (iso: string) => new Date(Date.parse(iso) + 7 * 3600_000).toISOString().slice(11, 16);
 
 const tone = (orders: OrderSummary[]) =>
   orders.length === 0
@@ -42,6 +45,15 @@ export function TableMapPage() {
   const [areaId, setAreaId] = useState<number | null>(null);
   const [appOpen, setAppOpen] = useState(false);
   const bizToday = useBusinessToday();
+  const bookings = useReservations(bizToday, bizToday).data;
+  /** Next booking still holding the table today ("Đặt 19:00" on the tile). */
+  const bookingOf = (tableId: number) =>
+    bookings?.find(
+      (r) =>
+        r.status === 'BOOKED' &&
+        r.tableId === tableId &&
+        Date.parse(r.reservedAt) + r.durationMin * 60_000 > now,
+    );
 
   const areas = floor.data?.areas ?? [];
   const others = floor.data?.others ?? [];
@@ -178,6 +190,7 @@ export function TableMapPage() {
               ))
             : tables.map((t) => {
                 const total = t.orders.reduce((s, o) => s + Number(o.total), 0);
+                const booking = bookingOf(t.id);
                 return (
                   <Tile
                     key={t.id}
@@ -195,6 +208,14 @@ export function TableMapPage() {
                     {t.orders.length > 1 && (
                       <span className="absolute left-1.5 top-1.5 rounded-full bg-white px-1.5 text-[11px] font-bold">
                         {t.orders.length} đơn
+                      </span>
+                    )}
+                    {booking && (
+                      <span
+                        title={`${booking.name} · ${booking.guests} khách`}
+                        className="num absolute -top-2 right-1.5 rounded-full border border-white bg-warn-soft px-1.5 text-[11px] font-bold text-warn"
+                      >
+                        Đặt {shopTime(booking.reservedAt)}
                       </span>
                     )}
                   </Tile>
@@ -216,6 +237,7 @@ export function TableMapPage() {
           <Legend className="bg-[#c7dbfb]">Đang dùng</Legend>
           <Legend className="bg-[#fbd9ae]">Đã in tạm tính – chờ thanh toán</Legend>
           <Legend className="border border-field bg-[#f2f4f7]">Còn trống</Legend>
+          <Legend className="bg-warn-soft">Có khách đặt hôm nay (giờ đến)</Legend>
         </div>
       </main>
 

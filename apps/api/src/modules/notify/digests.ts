@@ -11,6 +11,7 @@ import { stock } from '../inventory/inventory.service';
 import { daily, dashboard } from '../reports/reports.service';
 import * as bank from '../bank/bank.service';
 import * as einvoice from '../einvoice/einvoice.service';
+import * as reservations from '../reservations/reservations.service';
 
 const addDays = (iso: string, n: number) =>
   fromDbDate(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400_000));
@@ -104,6 +105,10 @@ export async function morningDigest(now = new Date()): Promise<string> {
     unclosedDays: unclosed.filter((x) => x !== prev?.day).length,
     backup: d.alerts.backup ? BACKUP_TEXT[d.alerts.backup] : null,
     tax: d.tax,
-    extra: [...(await bank.morningLines()), ...(await einvoice.morningLines())],
+    extra: [
+      ...(await reservations.morningLines()),
+      ...(await bank.morningLines()),
+      ...(await einvoice.morningLines()),
+    ],
   });
 }

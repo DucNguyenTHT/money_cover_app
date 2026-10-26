@@ -48,6 +48,7 @@ import * as owner from '../notify/notify.service';
 import * as einvoice from '../einvoice/einvoice.service';
 import * as customers from '../customers/customers.service';
 import * as promotions from '../promotions/promotions.service';
+import * as reservations from '../reservations/reservations.service';
 import { applyPromotions } from '../../domain/promotions/promotions';
 import { earnedPoints, pointsValue, redeemProblem } from '../../domain/loyalty/points';
 import { belowCostAlert, cancelPaidAlert, discountAlert } from '../../domain/notify/messages';
@@ -71,6 +72,7 @@ const include = {
   bankTransactions: { where: { ignoredAt: null }, select: { amount: true } },
   einvoices: { orderBy: { id: 'asc' } },
   customer: true,
+  reservation: { select: { id: true, name: true, deposit: true, depositMethod: true, depositOutcome: true } },
 } as const;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof include }>;
 
@@ -173,6 +175,16 @@ function toDto(o: OrderRow, names: Map<number, string>): OrderDto {
     pointsRedeemed: o.pointsRedeemed,
     pointsDiscount: o.pointsDiscount.toString(),
     pointsEarned: o.pointsEarned,
+    reservation: o.reservation
+      ? {
+          id: o.reservation.id,
+          name: o.reservation.name,
+          deposit: o.reservation.deposit.toString(),
+          depositMethod:
+            o.reservation.depositMethod === 'CASH' ? 'CASH' : o.reservation.depositMethod ? 'TRANSFER' : null,
+          depositOutcome: o.reservation.depositOutcome,
+        }
+      : null,
   };
 }
 
@@ -603,6 +615,11 @@ export async function open(user: AuthUser, input: z.infer<typeof openOrderInput>
         openedById: user.id,
       },
     });
+    if (input.reservationId) {
+      // Guests of a booking arrived: the order carries its customer (points) and its deposit.
+      const r = await reservations.arriveTx(tx, input.reservationId, o.id, o.tableId, user.id);
+      if (r.customerId) await tx.order.update({ where: { id: o.id }, data: { customerId: r.customerId } });
+    }
     if (input.items.length) await addItemsTx(tx, o, input.items);
     await recompute(tx, o.id);
     return o.id;
@@ -612,7 +629,6 @@ export async function open(user: AuthUser, input: z.infer<typeof openOrderInput>
   return dto;
 }
 
-/** Run a change on an open order inside one transaction, then recompute, notify and return it. */
 /** Promotions changed: open orders are worked out again (POS screens update through the socket). */
 export async function refreshOpenOrders() {
   const open = await prisma.order.findMany({ where: { status: 'OPEN' }, select: { id: true } });
@@ -622,6 +638,7 @@ export async function refreshOpenOrders() {
   }
 }
 
+/** Run a change on an open order inside one transaction, then recompute, notify and return it. */
 async function mutate(id: number, version: number | null, fn: (tx: Tx, o: OrderRow) => Promise<void>) {
   const before = await inTx(async (tx) => {
     const o = await loadOpen(tx, id, version);
@@ -1293,6 +1310,20 @@ export async function pay(user: AuthUser, id: number, b: z.infer<typeof payInput
       data: { status: 'PAID', paidById: user.id, paidAt: new Date(), version: { increment: 1 } },
     });
     if (o.customerId) await settlePointsTx(tx, id, o.customerId, user.id);
+    const paidBy = (m: string) =>
+      checked.lines.filter((l) => l.method === m).reduce((t, l) => t.add(l.amount), ZERO);
+    await reservations.onOrderPaidTx(
+      tx,
+      {
+        id,
+        code: o.code,
+        businessDate: date,
+        total: D(fresh.total.toString()),
+        cash: paidBy('CASH'),
+        transfer: paidBy('TRANSFER'),
+      },
+      user.id,
+    );
     await writeAudit(tx, {
       entity: 'order',
       entityId: id,
@@ -1439,6 +1470,7 @@ export async function cancel(
     if (closing) await tx.dayClosing.update({ where: { id: closing.id }, data: { needsReclose: true } });
     if (o.status === 'PAID') await einvoice.onOrderCancelledTx(tx, id, user.id);
     if (o.status === 'PAID' && o.customerId) await reversePointsTx(tx, o, user.id);
+    if (o.status === 'PAID') await reservations.onOrderCancelledTx(tx, id, user.id);
     if (o.status === 'PAID') {
       const approver = approvedBy
         ? await tx.user.findUnique({ where: { id: approvedBy }, select: { fullName: true } })

@@ -83,6 +83,7 @@ export async function billHtml(b: BillDto, provisional: boolean): Promise<string
     ${Number(o.serviceChargeAmount) > 0 ? `<div class="row"><span>Phụ thu ${Number(o.serviceChargePct)}%</span><span>${money(o.serviceChargeAmount)}</span></div>` : ''}
     ${Number(o.vatAmount) > 0 ? `<div class="row"><span>${o.vatMode === 'INCLUSIVE' ? 'Đã gồm' : ''} VAT ${Number(o.vatPct)}%</span><span>${money(o.vatAmount)}</span></div>` : ''}
     <div class="row big"><span>TỔNG</span><span>${money(o.total)}</span></div>
+    ${o.reservation && Number(o.reservation.deposit) > 0 && o.reservation.depositOutcome !== 'REFUNDED' && o.reservation.depositOutcome !== 'KEPT' ? `<div class="row"><span>Đã cọc trước</span><span>${money(o.reservation.deposit)}</span></div>` : ''}
     ${o.payments
       .map(
         (p) => `<div class="row"><span>${method[p.method]}</span><span>${money(p.amount)}</span></div>

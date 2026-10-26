@@ -411,6 +411,11 @@ function flowsSection() {
       ],
       ['Gửi bếp', 'in phiếu ESC/POS theo trạm, màn bếp nhận realtime', 'kitchen_status · printers'],
       [
+        'Đặt bàn',
+        'khách đặt trước (bàn, giờ, cọc); khách đến mở đơn từ đặt bàn; cọc tiền mặt vào sổ quỹ, trừ lại khi thanh toán',
+        'reservations · cash_entries (RESERVATION*) · orders',
+      ],
+      [
         'Khuyến mãi',
         'giờ vàng (% theo ngày / thứ / giờ gọi món) và combo (bộ món một giá) tự áp mỗi lần đơn đổi; dòng giảm tay thì không',
         'promotions · promotion_items · order_items.promo_discount',

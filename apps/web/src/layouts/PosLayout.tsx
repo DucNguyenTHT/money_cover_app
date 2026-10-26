@@ -10,6 +10,7 @@ import {
   UtensilsCrossed,
   Wallet,
   WifiOff,
+  CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { cn } from '@/lib/cn';
@@ -72,6 +73,9 @@ function PosShell() {
         </NavLink>
         <NavLink to="/pos/orders" className={tab} aria-label="Đơn hàng">
           <ReceiptText size={18} /> <span className="hidden md:inline">Đơn hàng</span>
+        </NavLink>
+        <NavLink to="/pos/reservations" className={tab} aria-label="Đặt bàn">
+          <CalendarDays size={18} /> <span className="hidden md:inline">Đặt bàn</span>
         </NavLink>
         <NavLink to="/pos/cash" className={tab} aria-label="Sổ quỹ">
           <Wallet size={18} /> <span className="hidden md:inline">Sổ quỹ</span>

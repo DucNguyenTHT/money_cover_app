@@ -139,6 +139,9 @@ export function billTicket(b: BillDto, paperWidth: number, provisional: boolean)
     escpos.doubleOff,
     escpos.boldOff,
   );
+  const dep = o.reservation;
+  if (dep && Number(dep.deposit) > 0 && dep.depositOutcome !== 'REFUNDED' && dep.depositOutcome !== 'KEPT')
+    parts.push(row('Da coc truoc', vnd(dep.deposit)));
   for (const p of o.payments) {
     const label = { CASH: 'Tien mat', TRANSFER: 'Chuyen khoan', CARD: 'The', APP: 'App' }[p.method];
     parts.push(row(label, vnd(p.amount)));

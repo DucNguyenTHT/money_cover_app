@@ -18,10 +18,19 @@ export const posKeys = {
   settings: ['pos', 'settings'] as const,
   kitchen: (station: string) => ['pos', 'kitchen', station] as const,
   day: (date: string) => ['pos', 'day', date] as const,
+  reservations: (from: string, to: string) => ['reservations', from, to] as const,
 };
 
 export const useFloor = () =>
   useQuery({ queryKey: posKeys.floor, queryFn: async () => ok(await client.orders.floor()) });
+
+/** Bookings of business days [from, to]; refreshed every minute (other tills book too). */
+export const useReservations = (from: string, to: string) =>
+  useQuery({
+    queryKey: posKeys.reservations(from, to),
+    queryFn: async () => ok(await client.reservations.list({ query: { from, to } })),
+    refetchInterval: 60_000,
+  });
 
 export const useOrder = (id: number | null) =>
   useQuery({

@@ -43,7 +43,8 @@ export function canCancelCash(e: {
   sameDay: boolean;
   automatic: boolean;
 }): string | null {
-  if (e.automatic) return 'Khoản này do màn hình khác tạo (trả nhà cung cấp, lương, tạm ứng) — huỷ ở đó';
+  if (e.automatic)
+    return 'Khoản này do màn hình khác tạo (trả nhà cung cấp, lương, tạm ứng, tiền cọc đặt bàn) — sửa / huỷ ở đó';
   if (e.role === 'ADMIN') return null;
   if (e.isAuthor && e.sameDay) return null;
   return 'Chỉ người ghi (trong ngày) hoặc ADMIN được huỷ khoản này';

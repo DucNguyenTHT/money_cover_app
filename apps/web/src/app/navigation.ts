@@ -7,6 +7,7 @@ import {
   Bike,
   BookOpen,
   CalendarClock,
+  CalendarDays,
   Boxes,
   Calculator,
   ChefHat,
@@ -175,7 +176,10 @@ export const NAV: NavModule[] = [
     groups: [
       {
         title: 'Khách hàng',
-        items: [{ label: 'Khách quen & điểm', icon: UserRound, path: '/admin/customers' }],
+        items: [
+          { label: 'Khách quen & điểm', icon: UserRound, path: '/admin/customers' },
+          { label: 'Đặt bàn', icon: CalendarDays, path: '/admin/reservations' },
+        ],
       },
     ],
   },

@@ -121,6 +121,25 @@ khuyến mãi thì các đơn đang mở được tính lại ngay. Đơn đã t
 - Xoá được khi chưa đơn đã thanh toán nào dùng; đã dùng thì tắt (bill cũ giữ tên). Danh sách hiện số đơn và tiền đã giảm
   tháng này.
 
+## Đặt bàn
+
+Máy bán hàng › Đặt bàn (hoặc Quản trị › Khách hàng › Đặt bàn). Đặt bàn thuộc **ngày kinh doanh của giờ đến**.
+
+- Ghi tên, điện thoại (trùng khách quen thì tự gắn — đơn được tích điểm), số khách, giờ đến, giữ bàn bao lâu (mặc định
+  2 giờ), bàn (có thể xếp sau), ghi chú. Một bàn không nhận hai đặt bàn trùng giờ.
+- Sơ đồ bàn hiện "Đặt 19:00" trên bàn có khách đặt còn lại trong ngày; danh sách báo _Trễ_ sau 15 phút. Tin sáng Telegram
+  liệt kê đặt bàn hôm nay.
+- **Khách đến:** mở đơn tại bàn (chọn bàn nếu chưa xếp) với số khách, ghi chú và khách quen của đặt bàn.
+- **Tiền cọc:**
+  - _Tiền mặt:_ tự ghi **thu** "Tiền cọc đặt bàn" vào sổ quỹ ngày nhận (tiền vào két). Sửa số cọc thì khoản cũ bị huỷ,
+    ghi khoản mới. Khi thanh toán, bill vẫn ghi đủ và dòng Tiền mặt phải gồm số cọc (khách chỉ đưa thêm phần còn lại;
+    "Khách đưa" là tiền đưa thêm); app tự ghi **chi** "Trừ tiền cọc vào đơn" cùng ngày bán → két hai ngày đều khớp.
+  - _Chuyển khoản:_ không vào két; khi thanh toán dòng Chuyển khoản phải gồm số cọc (mã QR chỉ hỏi phần còn lại).
+  - Cọc lớn hơn bill: thối / chuyển trả khách phần dư. Huỷ đơn đã thanh toán: cọc quay lại "đang giữ".
+  - Huỷ / khách không đến (cả khi đã mở đơn rồi huỷ đơn): **hoàn cọc** (tiền mặt: tự ghi chi "Hoàn tiền cọc" hôm nay)
+    hoặc **giữ cọc** (không tính vào doanh thu bán hàng). Các khoản sổ quỹ này chỉ sửa / huỷ từ đặt bàn.
+- Không xoá đặt bàn: huỷ có lý do. Sửa được khi khách chưa đến.
+
 ## Khách quen & tích điểm
 
 - Khách nhận theo **số điện thoại** (một số một khách; lưu dạng 0xxxxxxxxx, nhập +84 / có dấu cách đều được). Tìm theo
@@ -251,6 +270,7 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 | Khách quen: thêm / sửa, gắn vào đơn, đổi điểm                 | ✓     | ✓                               |               |
 | Khách quen: cộng / trừ điểm tay                               | ✓     |                                 |               |
 | Khuyến mãi: tạo / sửa / tắt                                   | ✓     |                                 |               |
+| Đặt bàn: ghi, sửa, khách đến, huỷ / hoàn / giữ cọc            | ✓     | ✓                               |               |
 | Nhân viên, chấm công, bảng lương, tạm ứng                     | ✓     |                                 |               |
 | Tự vào ca / ra ca (tài khoản gắn với nhân viên)               | ✓     | ✓                               | ✓             |
 | Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ  | ✓     |                                 |               |
