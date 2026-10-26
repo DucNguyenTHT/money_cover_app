@@ -15,6 +15,13 @@
 	handle /socket.io/* {
 		reverse_proxy api:4000
 	}
+	# Table QR page (also on the guest site below).
+	handle /t/* {
+		root * /srv
+		header Cache-Control "no-cache"
+		rewrite * /guest.html
+		file_server
+	}
 	handle {
 		root * /srv
 		# Hashed assets never change; index.html must always be fresh after an update.
@@ -37,4 +44,33 @@
 		file_server
 	}
 	respond "Tải chứng chỉ: /ca.crt" 200
+}
+
+# Plain-HTTP site for guests ordering from the table QR: their phones do not trust the shop's certificate.
+# Only the guest page, its files and the public API (own rate limit, no login) are reachable here.
+#   QR → http://<server-ip>:8081/t/<code>   (Cài đặt › Gọi món bằng mã QR)
+:8081 {
+	encode zstd gzip
+	handle /api/public/* {
+		reverse_proxy api:4000
+	}
+	handle /assets/* {
+		root * /srv
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+	handle /t/* {
+		root * /srv
+		header Cache-Control "no-cache"
+		rewrite * /guest.html
+		file_server
+	}
+	handle /icon.svg {
+		root * /srv
+		file_server
+	}
+	# Everything else (the staff app, its API) is not served here.
+	handle {
+		respond 404
+	}
 }

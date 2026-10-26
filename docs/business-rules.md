@@ -121,6 +121,19 @@ khuyến mãi thì các đơn đang mở được tính lại ngay. Đơn đã t
 - Xoá được khi chưa đơn đã thanh toán nào dùng; đã dùng thì tắt (bill cũ giữ tên). Danh sách hiện số đơn và tiền đã giảm
   tháng này.
 
+## Gọi món bằng mã QR tại bàn
+
+Bật ở Cài đặt; in mã ở Bàn & khu vực (hướng dẫn mạng / in: `setup-qr-order.md`). Khách không đăng nhập; mỗi bàn một mã
+ngẫu nhiên (đổi mã = mã cũ hết dùng).
+
+- Khách gửi **gọi món** (món, tuỳ chọn, ghi chú — giá tại quán), **gọi nhân viên**, **xin thanh toán**. Không có gì vào
+  đơn cho tới khi nhân viên **nhận**: gọi món → thêm vào đơn đang mở của bàn (chưa có thì mở đơn mới, 1 khách), chưa gửi
+  bếp; ghi chú chung của khách vào ghi chú đơn. Hai máy cùng bấm nhận: chỉ một máy được. Món vừa hết khi nhận → yêu cầu
+  quay lại chờ, máy báo lý do.
+- Từ chối phải có lý do (khách thấy trên điện thoại). Gọi nhân viên / xin thanh toán: nhận = đã xử lý.
+- Giới hạn chống phá: 8 lần gửi / phút / điện thoại (120 lần xem / phút), 3 yêu cầu chờ / điện thoại, 5 / bàn; tối đa
+  30 dòng, 1–20 phần / món. Yêu cầu chờ quá 3 giờ không hiện nữa.
+
 ## Đặt bàn
 
 Máy bán hàng › Đặt bàn (hoặc Quản trị › Khách hàng › Đặt bàn). Đặt bàn thuộc **ngày kinh doanh của giờ đến**.
@@ -271,6 +284,8 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 | Khách quen: cộng / trừ điểm tay                               | ✓     |                                 |               |
 | Khuyến mãi: tạo / sửa / tắt                                   | ✓     |                                 |               |
 | Đặt bàn: ghi, sửa, khách đến, huỷ / hoàn / giữ cọc            | ✓     | ✓                               |               |
+| Gọi món QR: nhận / từ chối yêu cầu                            | ✓     | ✓                               |               |
+| Gọi món QR: bật, in / đổi mã bàn                              | ✓     |                                 |               |
 | Nhân viên, chấm công, bảng lương, tạm ứng                     | ✓     |                                 |               |
 | Tự vào ca / ra ca (tài khoản gắn với nhân viên)               | ✓     | ✓                               | ✓             |
 | Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ  | ✓     |                                 |               |

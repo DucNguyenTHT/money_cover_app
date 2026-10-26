@@ -411,6 +411,11 @@ function flowsSection() {
       ],
       ['Gửi bếp', 'in phiếu ESC/POS theo trạm, màn bếp nhận realtime', 'kitchen_status · printers'],
       [
+        'Gọi món QR',
+        'khách quét mã trên bàn (trang riêng, cổng 8081, không đăng nhập) gửi yêu cầu; máy bán hàng nhận → món vào đơn của bàn',
+        'table_requests · tables.qr_token',
+      ],
+      [
         'Đặt bàn',
         'khách đặt trước (bàn, giờ, cọc); khách đến mở đơn từ đặt bàn; cọc tiền mặt vào sổ quỹ, trừ lại khi thanh toán',
         'reservations · cash_entries (RESERVATION*) · orders',

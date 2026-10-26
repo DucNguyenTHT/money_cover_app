@@ -110,6 +110,12 @@ export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 export const DEPOSIT_OUTCOMES = values('USED', 'REFUNDED', 'KEPT');
 export type DepositOutcome = (typeof DEPOSIT_OUTCOMES)[number];
 
+export const TABLE_REQUEST_KINDS = values('ORDER', 'CALL', 'BILL');
+export type TableRequestKind = (typeof TABLE_REQUEST_KINDS)[number];
+
+export const TABLE_REQUEST_STATUSES = values('PENDING', 'ACCEPTED', 'REJECTED');
+export type TableRequestStatus = (typeof TABLE_REQUEST_STATUSES)[number];
+
 export const EINVOICE_KINDS = values('ORIGINAL', 'ADJUSTMENT');
 export type EInvoiceKind = (typeof EINVOICE_KINDS)[number];
 

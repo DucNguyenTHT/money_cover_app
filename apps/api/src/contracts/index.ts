@@ -26,6 +26,7 @@ import { productionContract } from './production.contract';
 import { customersContract } from './customers.contract';
 import { promotionsContract } from './promotions.contract';
 import { reservationsContract } from './reservations.contract';
+import { guestContract, tableRequestsContract } from './table-requests.contract';
 
 const c = initContract();
 
@@ -58,6 +59,8 @@ export const api = c.router({
   customers: customersContract,
   promotions: promotionsContract,
   reservations: reservationsContract,
+  guest: guestContract,
+  tableRequests: tableRequestsContract,
 });
 
 export type Api = typeof api;
@@ -88,3 +91,4 @@ export * from './production.contract';
 export * from './customers.contract';
 export * from './promotions.contract';
 export * from './reservations.contract';
+export * from './table-requests.contract';

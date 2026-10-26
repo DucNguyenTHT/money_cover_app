@@ -10,6 +10,8 @@
 máy tính bảng / máy thu ngân ── HTTPS (Caddy, CA nội bộ) ──┬── /            → web build (React)
                                                           ├── /api/*       → api (Express, ts-rest)
                                                           └── /socket.io/* → api (Socket.IO)
+điện thoại khách (QR trên bàn) ── HTTP :8081 (Caddy) ──┬── /t/*          → guest.html (trang gọi món riêng, nhẹ)
+                                                       └── /api/public/* → api (không đăng nhập, giới hạn tần suất)
 api ── PostgreSQL 16          api ── TCP 9100 ── máy in nhiệt LAN
 api ── pg_dump 02:00 ──► backups/ ──(tuỳ chọn, Internet)──► Telegram bot · Google Drive của chủ quán
 api ── telegram_messages (hàng đợi) ──(Internet)──► Telegram: báo cáo chốt ngày, tin sáng, cảnh báo

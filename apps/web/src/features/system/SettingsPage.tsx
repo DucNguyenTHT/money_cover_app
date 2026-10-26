@@ -15,6 +15,7 @@ import { EInvoiceSection } from './EInvoiceSection';
 import { GoogleDriveSection } from './GoogleDriveSection';
 import { NotifySection } from './NotifySection';
 import { TelegramSection } from './TelegramSection';
+import { guestBaseUrl } from './TableQrDialog';
 import { client, errorMessage, ok } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 
@@ -219,6 +220,38 @@ export function SettingsPage() {
                 % khi đổi điểm.
               </p>
             </>
+          )}
+        </Section>
+
+        <Section
+          title="Gọi món bằng mã QR tại bàn"
+          hint="Khách quét mã dán trên bàn để gọi món, gọi nhân viên, xin thanh toán; máy bán hàng kêu và hiện yêu cầu, nhân viên bấm nhận thì món mới vào đơn. In mã ở Hệ thống → Bàn & khu vực."
+        >
+          <div className="sm:col-span-2 lg:col-span-3">
+            <Switch
+              checked={s.qr_order_enabled}
+              onChange={(v) => setS({ ...s, qr_order_enabled: v })}
+              label="Bật gọi món bằng QR"
+              description="Tắt thì mã đã dán vẫn còn, khách quét sẽ thấy “quán chưa bật”."
+            />
+          </div>
+          {s.qr_order_enabled && (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <Field
+                label="Địa chỉ trang gọi món (trong mã QR)"
+                hint={`Trống = ${guestBaseUrl('')}. Máy chủ chạy Docker: http://<IP máy chủ>:8081 — điện thoại khách vào Wi-Fi của quán phải mở được địa chỉ này. Đổi địa chỉ thì in lại mã.`}
+              >
+                {(id, d) => (
+                  <Input
+                    id={id}
+                    aria-describedby={d}
+                    className="num"
+                    placeholder="http://192.168.1.10:8081"
+                    {...text('qr_base_url')}
+                  />
+                )}
+              </Field>
+            </div>
           )}
         </Section>
 

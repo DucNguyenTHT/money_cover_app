@@ -36,4 +36,6 @@ export const DEFAULT_SETTINGS: Settings = {
   loyalty_point_value: 500,
   loyalty_min_redeem: 20,
   loyalty_max_redeem_pct: 50,
+  qr_order_enabled: false,
+  qr_base_url: '',
 };

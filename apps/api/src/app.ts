@@ -35,13 +35,36 @@ import { productionRouter } from './modules/production/production.router';
 import { customersRouter } from './modules/customers/customers.router';
 import { promotionsRouter } from './modules/promotions/promotions.router';
 import { reservationsRouter } from './modules/reservations/reservations.router';
+import { guestRouter, tableRequestsRouter } from './modules/table-requests/table-requests.router';
 import { architecturePage } from './modules/architecture/architecture.page';
+
+/** Per-device limit on the guest routes (per minute). */
+const guestLimit = (limit: number, message: string, skip?: (req: express.Request) => boolean) =>
+  rateLimit({
+    windowMs: 60_000,
+    limit,
+    skip: (req) => env.NODE_ENV === 'test' || !!skip?.(req),
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: { code: 'TOO_MANY_REQUESTS', message } });
+    },
+  });
 
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: env.CORS_ORIGIN.split(',') }));
+  // Behind Caddy (one hop): req.ip is the device, so the rate limits count each phone / tablet on its own.
+  app.set('trust proxy', 1);
+  // Guests' phones (QR at the table, no login): small bodies, their own limits.
+  app.use('/api/public', express.json({ limit: '20kb' }));
+  app.use('/api/public', guestLimit(120, 'Thao tác quá nhanh, đợi một chút rồi thử lại'));
+  app.use(
+    '/api/public',
+    guestLimit(8, 'Gửi quá nhiều yêu cầu, đợi 1 phút nhé', (req) => req.method !== 'POST'),
+  );
   app.use(express.json({ limit: '15mb' }));
   if (env.NODE_ENV !== 'test')
     app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/api/health' } }));
@@ -106,6 +129,8 @@ export function createApp() {
     customers: customersRouter,
     promotions: promotionsRouter,
     reservations: reservationsRouter,
+    guest: guestRouter,
+    tableRequests: tableRequestsRouter,
   });
   createExpressEndpoints(api, router, app, {
     globalMiddleware: [authMiddleware],

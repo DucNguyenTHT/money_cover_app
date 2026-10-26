@@ -10,6 +10,8 @@ export interface ServerToClientEvents {
   'printer:error': (p: { printerName: string; message: string }) => void;
   /** Money arrived on the shop's bank account (tied to an order, or not yet). */
   'bank:txn': (p: { orderId: number | null; orderCode: string | null; amount: string }) => void;
+  /** A guest sent a request from the table QR (title set), or a till handled one (title null). */
+  'table:request': (p: { tableId: number; requestId: number; title: string | null }) => void;
 }
 
 export interface ClientToServerEvents {

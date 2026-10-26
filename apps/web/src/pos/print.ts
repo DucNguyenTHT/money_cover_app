@@ -106,7 +106,8 @@ export function kitchenHtml(o: OrderDto, items: OrderItemDto[], stationLabel: st
 }
 
 /** Print an HTML fragment on an 80 mm page from a hidden iframe. */
-export function printHtml(body: string) {
+/** Print through a hidden frame; receipt layout unless other page CSS is given (A4 sheets). */
+export function printHtml(body: string, css = PAGE_CSS) {
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
   Object.assign(frame.style, {
@@ -121,7 +122,7 @@ export function printHtml(body: string) {
   const doc = frame.contentDocument!;
   doc.open();
   doc.write(
-    `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>In</title><style>${PAGE_CSS}</style></head><body>${body}</body></html>`,
+    `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>In</title><style>${css}</style></head><body>${body}</body></html>`,
   );
   doc.close();
   const go = () => {

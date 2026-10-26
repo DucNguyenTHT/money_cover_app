@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Users } from 'lucide-react';
+import { Pencil, Plus, QrCode, Users } from 'lucide-react';
+import { TableQrDialog } from './TableQrDialog';
 import type { AreaDto, TableDto } from '@ketoan/api/contracts';
 import { PageHeader } from '@/components/PageHeader';
 import { Button, IconButton } from '@/components/ui/Button';
@@ -17,6 +18,7 @@ export function TablesPage() {
   const areas = useQuery({ queryKey: ['areas'], queryFn: async () => ok(await client.venue.listAreas()) });
   const [area, setArea] = useState<AreaDto | 'new' | null>(null);
   const [table, setTable] = useState<{ areaId: number; table: TableDto | null } | null>(null);
+  const [qr, setQr] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: ['areas'] });
 
   return (
@@ -25,9 +27,14 @@ export function TablesPage() {
         title="Bàn & khu vực"
         subtitle="Sơ đồ bàn hiển thị trên màn hình bán hàng theo đúng thứ tự ở đây"
         actions={
-          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setArea('new')}>
-            Thêm khu vực
-          </Button>
+          <>
+            <Button icon={<QrCode size={16} />} onClick={() => setQr(true)}>
+              Mã QR gọi món
+            </Button>
+            <Button variant="primary" icon={<Plus size={16} />} onClick={() => setArea('new')}>
+              Thêm khu vực
+            </Button>
+          </>
         }
       />
       <div className="flex flex-col gap-4">
@@ -103,6 +110,7 @@ export function TablesPage() {
           onSaved={refresh}
         />
       )}
+      {qr && <TableQrDialog onClose={() => setQr(false)} />}
     </div>
   );
 }

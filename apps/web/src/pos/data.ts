@@ -19,10 +19,39 @@ export const posKeys = {
   kitchen: (station: string) => ['pos', 'kitchen', station] as const,
   day: (date: string) => ['pos', 'day', date] as const,
   reservations: (from: string, to: string) => ['reservations', from, to] as const,
+  tableRequests: ['pos', 'table-requests'] as const,
 };
 
 export const useFloor = () =>
   useQuery({ queryKey: posKeys.floor, queryFn: async () => ok(await client.orders.floor()) });
+
+/** Requests sent from the table QR (waiting, and handled in the last hour). */
+export const useTableRequests = () =>
+  useQuery({
+    queryKey: posKeys.tableRequests,
+    queryFn: async () => ok(await client.tableRequests.list()),
+    refetchInterval: 60_000,
+  });
+
+/** Short two-note chime so a busy till hears a guest request (ignored when the browser blocks sound). */
+function chime() {
+  try {
+    const ctx = new AudioContext();
+    [880, 1320].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.18);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.25);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + i * 0.18);
+      o.stop(ctx.currentTime + i * 0.18 + 0.3);
+    });
+    setTimeout(() => void ctx.close(), 1000);
+  } catch {
+    /* no audio */
+  }
+}
 
 /** Bookings of business days [from, to]; refreshed every minute (other tills book too). */
 export const useReservations = (from: string, to: string) =>
@@ -117,6 +146,13 @@ export function usePosRealtime(onNotice?: (message: string, tone: 'good' | 'bad'
       qc.invalidateQueries({ queryKey: posKeys.orders });
     },
     'dish:availability': () => qc.invalidateQueries({ queryKey: ['pos', 'menu'] }),
+    'table:request': ({ title }) => {
+      qc.invalidateQueries({ queryKey: posKeys.tableRequests });
+      if (title) {
+        chime();
+        onNotice?.(`${title} — xem ở Phòng bàn`, 'good');
+      }
+    },
   });
 }
 

@@ -204,6 +204,18 @@ enum DepositOutcome {
   KEPT
 }
 
+enum TableRequestKind {
+  ORDER
+  CALL
+  BILL
+}
+
+enum TableRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 /// ORIGINAL = hoá đơn của đơn bán; ADJUSTMENT = hoá đơn điều chỉnh giảm toàn bộ khi đơn đã phát hành bị huỷ.
 enum EInvoiceKind {
   ORIGINAL
@@ -470,16 +482,19 @@ model Area {
 /// Bàn trên sơ đồ bàn của POS.
 /// Lưu: khu vực, tên bàn, số chỗ, thứ tự, đang dùng.
 model DiningTable {
-  id     Int     @id @default(autoincrement())
-  areaId Int     @map("area_id")
-  name   String
-  seats  Int     @default(4)
-  sort   Int     @default(0)
-  active Boolean @default(true)
+  id      Int     @id @default(autoincrement())
+  areaId  Int     @map("area_id")
+  name    String
+  seats   Int     @default(4)
+  sort    Int     @default(0)
+  active  Boolean @default(true)
+  /// Mã trong QR gọi món dán trên bàn (đổi mã = QR cũ hết dùng được).
+  qrToken String? @unique @map("qr_token")
 
-  area         Area          @relation(fields: [areaId], references: [id])
-  orders       Order[]
-  reservations Reservation[]
+  area          Area           @relation(fields: [areaId], references: [id])
+  orders        Order[]
+  reservations  Reservation[]
+  tableRequests TableRequest[]
 
   @@map("tables")
 }
@@ -856,6 +871,34 @@ model Reservation {
 
   @@index([branchId, businessDate])
   @@map("reservations")
+}
+
+/// Yêu cầu từ bàn (QR)
+/// Khách quét mã QR trên bàn: gọi món, gọi nhân viên, xin thanh toán. Nhân viên nhận (món vào đơn của bàn) hoặc từ chối.
+/// Lưu: bàn, loại, trạng thái, món khách chọn, ghi chú, mã máy khách, đơn nhận món, người xử lý, lý do từ chối, IP.
+model TableRequest {
+  id           Int                @id @default(autoincrement())
+  branchId     Int                @map("branch_id")
+  tableId      Int                @map("table_id")
+  kind         TableRequestKind
+  status       TableRequestStatus @default(PENDING)
+  /// [{ dishId, qty, optionIds, note }] — giá tính lại khi nhận vào đơn.
+  items        Json?
+  note         String?
+  /// Random id kept by the guest's phone: it sees only its own requests.
+  clientId     String             @map("client_id")
+  orderId      Int?               @map("order_id")
+  handledById  Int?               @map("handled_by")
+  handledAt    DateTime?          @map("handled_at") @db.Timestamptz
+  rejectReason String?            @map("reject_reason")
+  ip           String?
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+
+  table DiningTable @relation(fields: [tableId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([tableId, status])
+  @@map("table_requests")
 }
 
 /// Lịch sử điểm

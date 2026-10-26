@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { AlertTriangle, Bike, ShoppingBag, UtensilsCrossed } from 'lucide-react';
+import { AlertTriangle, BellRing, Bike, ShoppingBag, UtensilsCrossed } from 'lucide-react';
 import type { OrderSummary } from '@ketoan/api/contracts';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
@@ -10,7 +10,15 @@ import { dateVi, money } from '@/lib/format';
 import { useBusinessToday } from '@/lib/business-date';
 import { cn } from '@/lib/cn';
 import { usePos } from '@/pos/context';
-import { minutesSince, useDeliveryApps, useFloor, useReservations, whereLabel } from '@/pos/data';
+import {
+  minutesSince,
+  useDeliveryApps,
+  useFloor,
+  useReservations,
+  useTableRequests,
+  whereLabel,
+} from '@/pos/data';
+import { REQUEST_LABEL, TableRequestsDialog } from '@/pos/TableRequestsDialog';
 import { OrderPanel } from '@/pos/OrderPanel';
 
 type Filter = 'all' | 'used' | 'free';
@@ -46,6 +54,9 @@ export function TableMapPage() {
   const [appOpen, setAppOpen] = useState(false);
   const bizToday = useBusinessToday();
   const bookings = useReservations(bizToday, bizToday).data;
+  // Guests asking from the table QR: a red chip on the table, a button listing them all.
+  const requests = (useTableRequests().data ?? []).filter((r) => r.status === 'PENDING');
+  const [requestsOf, setRequestsOf] = useState<number | 'all' | null>(null);
   /** Next booking still holding the table today ("Đặt 19:00" on the tile). */
   const bookingOf = (tableId: number) =>
     bookings?.find(
@@ -76,6 +87,7 @@ export function TableMapPage() {
   };
 
   const pickTable = (t: (typeof allTables)[number]) => {
+    if (requests.some((r) => r.tableId === t.id)) setRequestsOf(t.id);
     if (t.orders.length) setTarget({ orderId: t.orders[0]!.id });
     else
       setTarget({
@@ -133,6 +145,11 @@ export function TableMapPage() {
           <Button icon={<Bike size={18} />} onClick={() => setAppOpen(true)}>
             App
           </Button>
+          {requests.length > 0 && (
+            <Button variant="danger" icon={<BellRing size={18} />} onClick={() => setRequestsOf('all')}>
+              Yêu cầu ({requests.length})
+            </Button>
+          )}
           <Button
             variant="primary"
             icon={<UtensilsCrossed size={18} />}
@@ -191,6 +208,7 @@ export function TableMapPage() {
             : tables.map((t) => {
                 const total = t.orders.reduce((s, o) => s + Number(o.total), 0);
                 const booking = bookingOf(t.id);
+                const asks = requests.filter((r) => r.tableId === t.id);
                 return (
                   <Tile
                     key={t.id}
@@ -208,6 +226,11 @@ export function TableMapPage() {
                     {t.orders.length > 1 && (
                       <span className="absolute left-1.5 top-1.5 rounded-full bg-white px-1.5 text-[11px] font-bold">
                         {t.orders.length} đơn
+                      </span>
+                    )}
+                    {asks.length > 0 && (
+                      <span className="absolute -top-2 left-1.5 rounded-full border border-white bg-bad px-1.5 text-[11px] font-bold text-white">
+                        {asks.length > 1 ? `${asks.length} yêu cầu` : REQUEST_LABEL[asks[0]!.kind]}
                       </span>
                     )}
                     {booking && (
@@ -244,6 +267,16 @@ export function TableMapPage() {
       <div className="hidden w-[380px] shrink-0 lg:block xl:w-[460px]">
         <OrderPanel />
       </div>
+
+      {requestsOf !== null && (
+        <TableRequestsDialog
+          tableId={requestsOf === 'all' ? null : requestsOf}
+          onClose={() => setRequestsOf(null)}
+          onAccepted={(r) => {
+            if (r.orderId) setTarget({ orderId: r.orderId });
+          }}
+        />
+      )}
 
       <AppOrderDialog
         open={appOpen}

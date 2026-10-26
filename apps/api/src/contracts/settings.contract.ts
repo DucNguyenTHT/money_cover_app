@@ -60,6 +60,14 @@ export const settingsSchema = z.object({
   loyalty_min_redeem: z.coerce.number().int().min(0).max(1_000_000),
   /** Điểm trả tối đa bao nhiêu % giá trị đơn (sau giảm giá). */
   loyalty_max_redeem_pct: pct(),
+  /** Khách quét mã QR trên bàn để gọi món / gọi nhân viên / xin thanh toán (nhân viên xác nhận). */
+  qr_order_enabled: z.boolean(),
+  /** Địa chỉ trang gọi món trong QR, VD http://192.168.1.10:8081 (trống = tự lấy theo máy đang in). */
+  qr_base_url: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((v) => v === '' || /^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(v), 'Dạng http://địa-chỉ:cổng'),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
