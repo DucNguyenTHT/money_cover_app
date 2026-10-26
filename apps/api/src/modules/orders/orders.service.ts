@@ -18,7 +18,7 @@ import type {
   openOrderInput,
   payInput,
 } from '../../contracts/orders.contract';
-import { fromDbDate, toDbDate } from '../../domain/business-date';
+import { fromDbDate, toDbDate, VN_OFFSET_MINUTES } from '../../domain/business-date';
 import { sellingPrice } from '../../domain/pricing/price-list';
 import { priceEntries } from '../menu/menu.service';
 import { type Channel, type DiscountType, type OrderStatus, type Station } from '../../domain/enums';
@@ -47,6 +47,8 @@ import { billTicket, kitchenTicket, printTo } from './print';
 import * as owner from '../notify/notify.service';
 import * as einvoice from '../einvoice/einvoice.service';
 import * as customers from '../customers/customers.service';
+import * as promotions from '../promotions/promotions.service';
+import { applyPromotions } from '../../domain/promotions/promotions';
 import { earnedPoints, pointsValue, redeemProblem } from '../../domain/loyalty/points';
 import { belowCostAlert, cancelPaidAlert, discountAlert } from '../../domain/notify/messages';
 
@@ -56,7 +58,12 @@ const include = {
   table: { include: { area: true } },
   deliveryApp: true,
   items: {
-    include: { dish: true, options: { orderBy: { id: 'asc' } }, extras: true },
+    include: {
+      dish: true,
+      options: { orderBy: { id: 'asc' } },
+      extras: true,
+      promotion: { select: { name: true } },
+    },
     orderBy: { id: 'asc' },
   },
   payments: { orderBy: { id: 'asc' } },
@@ -95,6 +102,8 @@ function toItem(i: OrderRow['items'][number]): OrderItemDto {
     })),
     discountAmount: i.discountAmount.toString(),
     discountReason: i.discountReason,
+    promoDiscount: i.promoDiscount.toString(),
+    promotionName: i.promotion?.name ?? null,
     amount: i.amount.toString(),
     netAmount: i.netAmount.toString(),
     costTotal: i.costTotal.toString(),
@@ -125,6 +134,7 @@ function toDto(o: OrderRow, names: Map<number, string>): OrderDto {
     splitFromOrderId: o.splitFromOrderId,
     subtotal: o.subtotal.toString(),
     itemDiscountTotal: o.itemDiscountTotal.toString(),
+    promoDiscountTotal: o.promoDiscountTotal.toString(),
     orderDiscountType: o.orderDiscountType,
     orderDiscountValue: str(o.orderDiscountValue),
     orderDiscountAmount: o.orderDiscountAmount.toString(),
@@ -193,6 +203,7 @@ function toSummary(o: OrderRow, names: Map<number, string>): OrderSummary {
     hasUnsent: active.some((i) => i.kitchenStatus === 'NEW'),
     orderDiscountAmount: o.orderDiscountAmount.toString(),
     itemDiscountTotal: o.itemDiscountTotal.toString(),
+    promoDiscountTotal: o.promoDiscountTotal.toString(),
   };
 }
 
@@ -299,17 +310,38 @@ async function loadOpen(tx: Tx, id: number, version: number | null): Promise<Ord
 }
 
 /** Recompute line and order totals from the active lines and bump the version. */
+/** Minutes after local midnight (happy hour windows). */
+const localMinute = (d: Date) => (Math.floor(d.getTime() / 60_000) + VN_OFFSET_MINUTES) % 1440;
+
 async function recompute(tx: Tx, orderId: number): Promise<void> {
   const o = await tx.order.findUniqueOrThrow({
     where: { id: orderId },
-    include: { items: { orderBy: { id: 'asc' } }, deliveryApp: true },
+    include: {
+      items: { orderBy: { id: 'asc' }, include: { dish: { select: { categoryId: true } } } },
+      deliveryApp: true,
+    },
   });
   const active = o.items.filter((i) => i.status === 'ACTIVE');
+  // Happy hour and combos, worked out again on every change (a line discounted by hand gets none).
+  const promos = applyPromotions(
+    active.map((i) => ({
+      dishId: i.dishId,
+      categoryId: i.dish.categoryId,
+      qty: i.qty,
+      basePrice: i.basePrice.toString(),
+      unitPrice: i.unitPrice.toString(),
+      manualDiscount: !i.discountAmount.isZero(),
+      minute: localMinute(i.createdAt),
+    })),
+    await promotions.rules(tx, o.branchId),
+    { channel: o.channel, businessDate: fromDbDate(o.businessDate) },
+  );
   const t = orderTotals({
-    lines: active.map((i) => ({
+    lines: active.map((i, k) => ({
       qty: i.qty,
       unitPrice: i.unitPrice.toString(),
       discountAmount: i.discountAmount.toString(),
+      promoDiscount: promos[k]!.discount.toString(),
     })),
     orderDiscount: o.orderDiscountType
       ? { type: o.orderDiscountType, value: o.orderDiscountValue?.toString() ?? 0 }
@@ -326,13 +358,30 @@ async function recompute(tx: Tx, orderId: number): Promise<void> {
   }
   for (const [k, i] of active.entries()) {
     const l = t.lines[k]!;
-    if (!i.amount.equals(l.amount.toString()) || !i.netAmount.equals(l.netAmount.toString())) {
+    const promo = promos[k]!;
+    if (
+      !i.amount.equals(l.amount.toString()) ||
+      !i.netAmount.equals(l.netAmount.toString()) ||
+      !i.promoDiscount.equals(promo.discount.toString()) ||
+      i.promotionId !== promo.promotionId
+    ) {
       await tx.orderItem.update({
         where: { id: i.id },
-        data: { amount: l.amount.toString(), netAmount: l.netAmount.toString() },
+        data: {
+          amount: l.amount.toString(),
+          netAmount: l.netAmount.toString(),
+          promoDiscount: promo.discount.toString(),
+          promotionId: promo.promotionId,
+        },
       });
     }
   }
+  const dropped = o.items.filter((i) => i.status !== 'ACTIVE' && i.promotionId !== null).map((i) => i.id);
+  if (dropped.length)
+    await tx.orderItem.updateMany({
+      where: { id: { in: dropped } },
+      data: { promoDiscount: 0, promotionId: null },
+    });
   const commission = o.deliveryApp
     ? roundVnd(t.total.mul(o.deliveryApp.commissionPct.toString()).div(100))
     : ZERO;
@@ -341,6 +390,7 @@ async function recompute(tx: Tx, orderId: number): Promise<void> {
     data: {
       subtotal: t.subtotal.toString(),
       itemDiscountTotal: t.itemDiscountTotal.toString(),
+      promoDiscountTotal: t.promoDiscountTotal.toString(),
       orderDiscountAmount: t.orderDiscountAmount.toString(),
       serviceChargeAmount: t.serviceChargeAmount.toString(),
       netRevenue: t.netRevenue.toString(),
@@ -442,7 +492,7 @@ const optionRows = (r: ResolvedOptions) => ({
 
 /** Create data copying a line (another qty / order): its option and extra snapshots come along. */
 function copyLine(it: OrderRow['items'][number]) {
-  const { id: _id, dish: _dish, options, extras, ...rest } = it;
+  const { id: _id, dish: _dish, promotion: _promotion, options, extras, ...rest } = it;
   return {
     ...rest,
     options: { create: options.map(({ id: _o, orderItemId: _i, ...o }) => o) },
@@ -563,6 +613,15 @@ export async function open(user: AuthUser, input: z.infer<typeof openOrderInput>
 }
 
 /** Run a change on an open order inside one transaction, then recompute, notify and return it. */
+/** Promotions changed: open orders are worked out again (POS screens update through the socket). */
+export async function refreshOpenOrders() {
+  const open = await prisma.order.findMany({ where: { status: 'OPEN' }, select: { id: true } });
+  for (const { id } of open) {
+    await inTx((tx) => recompute(tx, id));
+    notify(await getOrder(id));
+  }
+}
+
 async function mutate(id: number, version: number | null, fn: (tx: Tx, o: OrderRow) => Promise<void>) {
   const before = await inTx(async (tx) => {
     const o = await loadOpen(tx, id, version);
@@ -625,6 +684,7 @@ export const redeemPoints = (user: AuthUser, id: number, version: number, points
       if (!o.customer) throw badRequest('Chọn khách quen cho đơn trước');
       const base = D(o.subtotal.toString())
         .sub(o.itemDiscountTotal.toString())
+        .sub(o.promoDiscountTotal.toString())
         .sub(o.orderDiscountAmount.toString());
       const problem = redeemProblem(points, o.customer.points, base, {
         earnVnd: s.loyalty_earn_vnd,

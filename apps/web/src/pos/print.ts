@@ -72,14 +72,16 @@ export async function billHtml(b: BillDto, provisional: boolean): Promise<string
         ) => `<div class="item"><div>${esc(i.dishName)}${i.note ? ` <span class="s">(${esc(i.note)})</span>` : ''}</div>
         ${i.options.length ? `<div class="s">  ${esc(optionsLabel(i.options))}</div>` : ''}
         <div class="row s"><span>${i.qty} × ${money(i.unitPrice)}</span><span>${money(i.amount)}</span></div>
-        ${Number(i.discountAmount) > 0 ? `<div class="row s"><span>Giảm giá</span><span>−${money(i.discountAmount)}</span></div>` : ''}</div>`,
+        ${Number(i.discountAmount) > 0 ? `<div class="row s"><span>Giảm giá</span><span>−${money(i.discountAmount)}</span></div>` : ''}
+        ${Number(i.promoDiscount) > 0 ? `<div class="row s"><span>KM ${esc(i.promotionName ?? '')}</span><span>−${money(i.promoDiscount)}</span></div>` : ''}</div>`,
       )
       .join('')}
     <hr><div class="row"><span>Tổng tiền hàng</span><span>${money(o.subtotal)}</span></div>
+    ${Number(o.promoDiscountTotal) > 0 ? `<div class="row"><span>Khuyến mãi</span><span>−${money(o.promoDiscountTotal)}</span></div>` : ''}
     ${discount > 0 ? `<div class="row"><span>Giảm giá${o.discountReason ? ` (${esc(o.discountReason)})` : ''}</span><span>−${money(discount)}</span></div>` : ''}
+    ${Number(o.pointsDiscount) > 0 ? `<div class="row"><span>Đổi ${o.pointsRedeemed} điểm</span><span>−${money(o.pointsDiscount)}</span></div>` : ''}
     ${Number(o.serviceChargeAmount) > 0 ? `<div class="row"><span>Phụ thu ${Number(o.serviceChargePct)}%</span><span>${money(o.serviceChargeAmount)}</span></div>` : ''}
     ${Number(o.vatAmount) > 0 ? `<div class="row"><span>${o.vatMode === 'INCLUSIVE' ? 'Đã gồm' : ''} VAT ${Number(o.vatPct)}%</span><span>${money(o.vatAmount)}</span></div>` : ''}
-    ${Number(o.pointsDiscount) > 0 ? `<div class="row"><span>Đổi ${o.pointsRedeemed} điểm</span><span>−${money(o.pointsDiscount)}</span></div>` : ''}
     <div class="row big"><span>TỔNG</span><span>${money(o.total)}</span></div>
     ${o.payments
       .map(

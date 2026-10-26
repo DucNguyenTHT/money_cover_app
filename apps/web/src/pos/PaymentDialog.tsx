@@ -423,6 +423,9 @@ export function PaymentDialog({
 
         <aside className="flex flex-col gap-2 rounded-card bg-page p-4 text-[13px]">
           <Row label="Tổng tiền hàng" value={order.subtotal} />
+          {Number(order.promoDiscountTotal) > 0 && (
+            <Row label="Khuyến mãi" value={String(-Number(order.promoDiscountTotal))} />
+          )}
           {Number(order.itemDiscountTotal) + Number(order.orderDiscountAmount) > 0 && (
             <Row
               label="Giảm giá"

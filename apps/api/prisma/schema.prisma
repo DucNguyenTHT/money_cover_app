@@ -186,6 +186,11 @@ enum PointKind {
   REVERSE
 }
 
+enum PromotionKind {
+  TIME
+  COMBO
+}
+
 /// ORIGINAL = hoá đơn của đơn bán; ADJUSTMENT = hoá đơn điều chỉnh giảm toàn bộ khi đơn đã phát hành bị huỷ.
 enum EInvoiceKind {
   ORIGINAL
@@ -274,7 +279,8 @@ model DishCategory {
   taxGroup       TaxGroup @default(PRODUCTION) @map("tax_group")
   sort           Int      @default(0)
 
-  dishes Dish[]
+  dishes         Dish[]
+  promotionItems PromotionItem[]
 
   @@map("dish_categories")
 }
@@ -299,6 +305,7 @@ model Dish {
   optionGroups         DishOptionGroup[]
   orderItems           OrderItem[]
   stocktakeAllocations StocktakeDishAllocation[]
+  promotionItems       PromotionItem[]
 
   @@map("dishes")
 }
@@ -585,6 +592,8 @@ model Order {
   pointsDiscount       Decimal       @default(0) @map("points_discount") @db.Decimal(16, 2)
   /// Điểm tích được khi thanh toán (để hoàn khi huỷ, in trên bill).
   pointsEarned         Int           @default(0) @map("points_earned")
+  /// Tổng tiền khuyến mãi tự động (giờ vàng, combo) của các dòng — không tính vào giới hạn giảm giá của nhân viên.
+  promoDiscountTotal   Decimal       @default(0) @map("promo_discount_total") @db.Decimal(16, 2)
 
   table            DiningTable?      @relation(fields: [tableId], references: [id])
   deliveryApp      DeliveryApp?      @relation(fields: [deliveryAppId], references: [id])
@@ -619,6 +628,9 @@ model OrderItem {
   optionsKey     String        @default("") @map("options_key")
   discountAmount Decimal       @default(0) @map("discount_amount") @db.Decimal(16, 2)
   discountReason String?       @map("discount_reason")
+  /// Khuyến mãi tự động của dòng (giờ vàng / combo); dòng giảm giá tay thì không có.
+  promoDiscount  Decimal       @default(0) @map("promo_discount") @db.Decimal(16, 2)
+  promotionId    Int?          @map("promotion_id")
   amount         Decimal       @db.Decimal(16, 2)
   /// After item discount and the share of the order-level discount.
   netAmount      Decimal       @default(0) @map("net_amount") @db.Decimal(16, 2)
@@ -634,12 +646,15 @@ model OrderItem {
   cancelledById  Int?          @map("cancelled_by")
   cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz
   wasted         Boolean       @default(false)
+  /// Lúc gọi món (giờ vàng xét theo giờ này).
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
-  order   Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  dish    Dish              @relation(fields: [dishId], references: [id])
-  recipe  DishRecipe?       @relation(fields: [recipeId], references: [id])
-  options OrderItemOption[]
-  extras  OrderItemExtra[]
+  order     Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  promotion Promotion?        @relation(fields: [promotionId], references: [id])
+  dish      Dish              @relation(fields: [dishId], references: [id])
+  recipe    DishRecipe?       @relation(fields: [recipeId], references: [id])
+  options   OrderItemOption[]
+  extras    OrderItemExtra[]
 
   @@index([orderId])
   @@index([station, kitchenStatus])
@@ -742,6 +757,54 @@ model Customer {
 
   @@index([name])
   @@map("customers")
+}
+
+/// Khuyến mãi
+/// Giờ vàng (giảm % món / nhóm món theo ngày, thứ, giờ) hoặc combo (bộ món giá trọn gói); tự áp vào đơn đang mở.
+/// Lưu: tên, loại, bật / tắt, ngày bắt đầu / kết thúc, thứ trong tuần, khung giờ, kênh, % giảm hoặc giá combo.
+model Promotion {
+  id         Int           @id @default(autoincrement())
+  branchId   Int           @map("branch_id")
+  name       String
+  kind       PromotionKind
+  active     Boolean       @default(true)
+  startDate  DateTime?     @map("start_date") @db.Date
+  endDate    DateTime?     @map("end_date") @db.Date
+  /// 1 = thứ Hai … 7 = Chủ nhật (theo ngày kinh doanh); rỗng = mọi ngày.
+  weekdays   Int[]
+  /// "HH:MM" theo giờ gọi món; cả hai rỗng = cả ngày; bắt đầu > kết thúc = qua nửa đêm.
+  startTime  String?       @map("start_time")
+  endTime    String?       @map("end_time")
+  channels   Channel[]
+  /// Giờ vàng: % giảm trên giá dòng (gồm tuỳ chọn).
+  percent    Decimal?      @db.Decimal(5, 2)
+  /// Combo: giá một bộ (tính trên giá món, tuỳ chọn vẫn cộng thêm).
+  comboPrice Decimal?      @map("combo_price") @db.Decimal(16, 2)
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  items      PromotionItem[]
+  orderItems OrderItem[]
+
+  @@map("promotions")
+}
+
+/// Món của khuyến mãi
+/// Combo: món và số phần trong một bộ. Giờ vàng: món hoặc nhóm món được giảm (không có dòng nào = cả thực đơn).
+/// Lưu: khuyến mãi, món hoặc nhóm món, số phần.
+model PromotionItem {
+  id          Int  @id @default(autoincrement())
+  promotionId Int  @map("promotion_id")
+  dishId      Int? @map("dish_id")
+  categoryId  Int? @map("category_id")
+  qty         Int  @default(1)
+
+  promotion Promotion     @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  dish      Dish?         @relation(fields: [dishId], references: [id])
+  category  DishCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([promotionId])
+  @@map("promotion_items")
 }
 
 /// Lịch sử điểm

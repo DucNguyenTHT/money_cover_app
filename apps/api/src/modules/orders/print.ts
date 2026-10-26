@@ -113,9 +113,12 @@ export function billTicket(b: BillDto, paperWidth: number, provisional: boolean)
     if (it.options.length) parts.push(escpos.text(`  (${optionsLabel(it.options)})`));
     parts.push(row(`  ${it.qty} x ${vnd(it.unitPrice)}`, vnd(it.amount)));
     if (Number(it.discountAmount) > 0) parts.push(row('  Giam gia', `-${vnd(it.discountAmount)}`));
+    if (Number(it.promoDiscount) > 0)
+      parts.push(row(`  KM ${it.promotionName ?? ''}`, `-${vnd(it.promoDiscount)}`));
   }
   parts.push(line, row('Tong tien hang', vnd(o.subtotal)));
   const disc = Number(o.itemDiscountTotal) + Number(o.orderDiscountAmount);
+  if (Number(o.promoDiscountTotal) > 0) parts.push(row('Khuyen mai', `-${vnd(o.promoDiscountTotal)}`));
   if (disc > 0) parts.push(row('Giam gia', `-${vnd(disc)}`));
   if (Number(o.pointsDiscount) > 0)
     parts.push(row(`Doi ${o.pointsRedeemed} diem`, `-${vnd(o.pointsDiscount)}`));

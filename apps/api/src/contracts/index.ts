@@ -24,6 +24,7 @@ import { bankContract } from './bank.contract';
 import { einvoiceContract } from './einvoice.contract';
 import { productionContract } from './production.contract';
 import { customersContract } from './customers.contract';
+import { promotionsContract } from './promotions.contract';
 
 const c = initContract();
 
@@ -54,6 +55,7 @@ export const api = c.router({
   einvoice: einvoiceContract,
   production: productionContract,
   customers: customersContract,
+  promotions: promotionsContract,
 });
 
 export type Api = typeof api;
@@ -82,3 +84,4 @@ export * from './bank.contract';
 export * from './einvoice.contract';
 export * from './production.contract';
 export * from './customers.contract';
+export * from './promotions.contract';

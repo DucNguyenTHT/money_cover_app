@@ -342,12 +342,24 @@ export function OrderPanel({ onPaid, onClose }: { onPaid?: () => void; onClose?:
               </span>
               <span>{money(order.subtotal)}</span>
             </div>
+            {Number(order.promoDiscountTotal) > 0 && (
+              <div className="flex justify-between text-good">
+                <span>Khuyến mãi</span>
+                <span>−{money(order.promoDiscountTotal)}</span>
+              </div>
+            )}
             {discount > 0 && (
               <div className="flex justify-between text-muted">
                 <span className="truncate">
                   Giảm giá{order.discountReason ? ` (${order.discountReason})` : ''}
                 </span>
                 <span>−{money(discount)}</span>
+              </div>
+            )}
+            {Number(order.pointsDiscount) > 0 && (
+              <div className="flex justify-between text-muted">
+                <span>Đổi {order.pointsRedeemed} điểm</span>
+                <span>−{money(order.pointsDiscount)}</span>
               </div>
             )}
             {Number(order.serviceChargeAmount) > 0 && (
@@ -562,6 +574,11 @@ function Line({
             <span className="text-warn"> · −{money(item.discountAmount)}</span>
           )}
         </span>
+        {Number(item.promoDiscount) > 0 && (
+          <span className="max-w-full truncate text-xs text-good">
+            {item.promotionName} −{money(item.promoDiscount)}
+          </span>
+        )}
       </button>
       <span className="flex h-[30px] items-center justify-center rounded-ctl border border-field">
         <button
@@ -584,7 +601,7 @@ function Line({
       </span>
       <span className="hidden text-right text-muted sm:block">{money(item.unitPrice)}</span>
       <span className="text-right font-semibold">
-        {money(Number(item.amount) - Number(item.discountAmount))}
+        {money(Number(item.amount) - Number(item.discountAmount) - Number(item.promoDiscount))}
       </span>
     </div>
   );

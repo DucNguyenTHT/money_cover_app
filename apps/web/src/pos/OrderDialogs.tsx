@@ -392,7 +392,7 @@ export function DiscountDialog({
       if (o) onDone(o);
     });
 
-  const base = Number(order.subtotal) - Number(order.itemDiscountTotal);
+  const base = Number(order.subtotal) - Number(order.itemDiscountTotal) - Number(order.promoDiscountTotal);
   const preview =
     type === 'PERCENT'
       ? Math.round((base * Math.min(Number(value) || 0, 100)) / 100)

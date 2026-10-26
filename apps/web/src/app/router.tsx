@@ -50,6 +50,7 @@ const adminScreens: Record<string, Pick<RouteObject, 'lazy'> & { staff?: boolean
   'menu/dishes': lazyComponent(() => import('@/features/catalog/DishesPage'), 'DishesPage'),
   'menu/options': lazyComponent(() => import('@/features/catalog/OptionGroupsPage'), 'OptionGroupsPage'),
   'menu/ingredients': lazyComponent(() => import('@/features/catalog/IngredientsPage'), 'IngredientsPage'),
+  'menu/promotions': lazyComponent(() => import('@/features/promotions/PromotionsPage'), 'PromotionsPage'),
   'menu/cost-sheet': lazyComponent(() => import('@/features/pricing/PricingPages'), 'CostSheetPage'),
   'menu/price-alerts': lazyComponent(() => import('@/features/pricing/PricingPages'), 'PriceAlertsPage'),
   'menu/price-history': lazyComponent(

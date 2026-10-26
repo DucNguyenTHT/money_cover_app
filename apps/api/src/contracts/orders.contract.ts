@@ -48,6 +48,9 @@ export const orderItemSchema = z.object({
   ),
   discountAmount: decimalString,
   discountReason: z.string().nullable(),
+  /** Automatic promotion (happy hour / combo) on this line. */
+  promoDiscount: decimalString,
+  promotionName: z.string().nullable(),
   amount: decimalString,
   netAmount: decimalString,
   costTotal: decimalString.optional(),
@@ -84,6 +87,7 @@ export const orderSchema = z.object({
   splitFromOrderId: z.number().nullable(),
   subtotal: decimalString,
   itemDiscountTotal: decimalString,
+  promoDiscountTotal: decimalString,
   orderDiscountType: z.enum(DISCOUNT_TYPES).nullable(),
   orderDiscountValue: decimalString.nullable(),
   orderDiscountAmount: decimalString,
@@ -149,6 +153,7 @@ export const orderSummarySchema = orderSchema
     hasUnsent: z.boolean(),
     orderDiscountAmount: decimalString,
     itemDiscountTotal: decimalString,
+    promoDiscountTotal: decimalString,
   });
 export type OrderSummary = z.infer<typeof orderSummarySchema>;
 

@@ -12,7 +12,7 @@ Các công thức nằm trong `apps/api/src/domain` (có unit test). Tài liệu
 | Bước             | Quy tắc                                                                                                                                                                               |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Giá              | Theo kênh và ngày kinh doanh của đơn: tại quán / mang về dùng giá `STORE`; đơn app dùng giá riêng của app đó → giá app chung → giá tại quán. Nhân viên không sửa giá, chỉ giảm giá    |
-| Tổng tiền        | tạm tính − giảm giá món − giảm giá đơn − đổi điểm = doanh số → + phụ thu (chỉ kênh được cài) → + VAT (`EXCLUSIVE`) hoặc tách VAT ra khỏi giá (`INCLUSIVE`)                            |
+| Tổng tiền        | tạm tính − giảm giá món − khuyến mãi − giảm giá đơn − đổi điểm = doanh số → + phụ thu (chỉ kênh được cài) → + VAT (`EXCLUSIVE`) hoặc tách VAT ra khỏi giá (`INCLUSIVE`)               |
 | Doanh thu thuần  | doanh số + phụ thu, **không gồm VAT** (VAT là tiền thu hộ, báo riêng)                                                                                                                 |
 | Giảm giá         | Bắt lý do. Vượt `max_discount_pct` cần ADMIN nhập PIN; lưu người duyệt                                                                                                                |
 | Gửi bếp          | Món mới chia theo trạm của nhóm món (Bếp / Bar). Món đã gửi chỉ **huỷ** được (có lý do, hỏi đã chế biến chưa)                                                                         |
@@ -100,6 +100,26 @@ Bật ở Cài đặt › Hoá đơn điện tử (Giả lập để thử, ho�
   nền. Mất mạng → thử lại sau 1, 5, 15, 60 phút; quá 3 ngày → _bị từ chối_. Nhà cung cấp từ chối → cảnh báo, gửi lại với mã mới.
 - **Huỷ đơn:** hoá đơn chưa gửi → huỷ; đã phát hành → hoá đơn **điều chỉnh giảm toàn bộ** (số tiền âm), tự gửi khi hoá đơn gốc đã phát hành.
 - Hộ kinh doanh: hoá đơn bán hàng, không ghi thuế suất. Công ty: thuế suất của đơn, tiền thuế chia theo dòng đúng đến đồng.
+
+## Khuyến mãi (giờ vàng, combo)
+
+Thực đơn › Khuyến mãi (ADMIN). Khuyến mãi **tự áp** vào đơn đang mở, tính lại mỗi khi đơn thay đổi; lưu / tắt / xoá
+khuyến mãi thì các đơn đang mở được tính lại ngay. Đơn đã thanh toán giữ nguyên.
+
+- **Giờ vàng:** giảm % giá dòng (gồm tuỳ chọn) cho cả thực đơn, một số nhóm món hoặc một số món.
+- **Combo:** bộ món (món × số phần) bán một giá. Đơn đủ món của bộ → tính giá combo, đủ 2 bộ tính 2 lần. Tiền giảm =
+  giá món lẻ của bộ − giá combo, chia vào các dòng theo giá món; tuỳ chọn / topping vẫn cộng thêm. Màn sửa combo hiện
+  giá lẻ, tiền khách được giảm, giá vốn và lãi gộp của bộ.
+- **Khi nào chạy:** ngày bắt đầu / kết thúc và thứ trong tuần theo **ngày kinh doanh**; khung giờ theo **lúc gọi món**
+  (món gọi 16:55 trong giờ vàng 14:00–17:00 vẫn được giảm khi thanh toán lúc 17:30; giờ bắt đầu sau giờ kết thúc = qua
+  nửa đêm); chọn kênh (mặc định tại bàn + mang về, không gồm app).
+- **Thứ tự:** combo trước (bộ giảm nhiều nhất trước), phần còn lại lấy giờ vàng có % cao nhất. Dòng đã **giảm giá tay**
+  không được khuyến mãi (không giảm hai lần). Không giảm quá giá dòng.
+- Tiền khuyến mãi lưu theo dòng (`order_items.promo_discount`, khuyến mãi nào) và tổng đơn (`orders.promo_discount_total`);
+  doanh thu thuần, lãi theo món, lãi lỗ đều đã trừ. Báo cáo gộp vào _giảm giá_; **không** tính vào giới hạn giảm giá
+  của nhân viên và không báo Telegram. Bill in từng dòng "KM …" và dòng "Khuyến mãi".
+- Xoá được khi chưa đơn đã thanh toán nào dùng; đã dùng thì tắt (bill cũ giữ tên). Danh sách hiện số đơn và tiền đã giảm
+  tháng này.
 
 ## Khách quen & tích điểm
 
@@ -230,6 +250,7 @@ Kiểm tra chéo trong báo cáo "Lãi theo món": Σ lãi sau kiểm kê các m
 | Hoá đơn điện tử: chọn nhà cung cấp, xem danh sách             | ✓     |                                 |               |
 | Khách quen: thêm / sửa, gắn vào đơn, đổi điểm                 | ✓     | ✓                               |               |
 | Khách quen: cộng / trừ điểm tay                               | ✓     |                                 |               |
+| Khuyến mãi: tạo / sửa / tắt                                   | ✓     |                                 |               |
 | Nhân viên, chấm công, bảng lương, tạm ứng                     | ✓     |                                 |               |
 | Tự vào ca / ra ca (tài khoản gắn với nhân viên)               | ✓     | ✓                               | ✓             |
 | Chốt / huỷ kiểm kê, thực đơn, giá, báo cáo, cài đặt, khoá sổ  | ✓     |                                 |               |

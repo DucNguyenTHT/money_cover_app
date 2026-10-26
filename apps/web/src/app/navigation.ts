@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Store,
+  TicketPercent,
   Truck,
   UserCog,
   UserRound,
@@ -81,6 +82,7 @@ export const NAV: NavModule[] = [
           { label: 'Món & nhóm món', icon: BookOpen, path: '/admin/menu/dishes' },
           { label: 'Tuỳ chọn món', icon: ListPlus, path: '/admin/menu/options' },
           { label: 'Nguyên liệu', icon: Boxes, path: '/admin/menu/ingredients' },
+          { label: 'Khuyến mãi', icon: TicketPercent, path: '/admin/menu/promotions' },
         ],
       },
       {

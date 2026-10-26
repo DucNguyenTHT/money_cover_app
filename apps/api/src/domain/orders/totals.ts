@@ -6,6 +6,8 @@ export interface TotalsLine {
   unitPrice: Num;
   /** Discount on this line (whole đồng). */
   discountAmount?: Num;
+  /** Automatic promotion on this line (happy hour, combo), after the hand discount. */
+  promoDiscount?: Num;
 }
 
 export interface TotalsInput {
@@ -22,6 +24,7 @@ export interface TotalsInput {
 export interface Totals {
   subtotal: Decimal;
   itemDiscountTotal: Decimal;
+  promoDiscountTotal: Decimal;
   orderDiscountAmount: Decimal;
   pointsDiscountAmount: Decimal;
   serviceChargeAmount: Decimal;
@@ -40,14 +43,18 @@ const vatInside = (gross: Decimal, vatPct: Decimal) =>
 
 /**
  * Order totals, rounded to whole đồng at every step:
- * subtotal − line discounts − order discount − points = sales; + service charge; + VAT (EXCLUSIVE) or VAT taken out (INCLUSIVE).
+ * subtotal − line discounts − promotions − order discount − points = sales; + service charge; + VAT (EXCLUSIVE) or VAT taken out (INCLUSIVE).
  */
 export function orderTotals(input: TotalsInput): Totals {
   const amounts = input.lines.map((l) => roundVnd(D(l.qty).mul(l.unitPrice)));
   const lineDiscounts = input.lines.map((l, i) => Decimal.min(roundVnd(l.discountAmount ?? 0), amounts[i]!));
-  const afterLine = amounts.map((a, i) => a.sub(lineDiscounts[i]!));
+  const promos = input.lines.map((l, i) =>
+    Decimal.max(ZERO, Decimal.min(roundVnd(l.promoDiscount ?? 0), amounts[i]!.sub(lineDiscounts[i]!))),
+  );
+  const afterLine = amounts.map((a, i) => a.sub(lineDiscounts[i]!).sub(promos[i]!));
   const subtotal = sum(amounts);
   const itemDiscountTotal = sum(lineDiscounts);
+  const promoDiscountTotal = sum(promos);
   const base = sum(afterLine);
 
   let orderDiscountAmount = ZERO;
@@ -88,6 +95,7 @@ export function orderTotals(input: TotalsInput): Totals {
   return {
     subtotal,
     itemDiscountTotal,
+    promoDiscountTotal,
     orderDiscountAmount,
     pointsDiscountAmount,
     serviceChargeAmount,

@@ -101,6 +101,9 @@ export type EInvoiceStatus = (typeof EINVOICE_STATUSES)[number];
 export const POINT_KINDS = values('EARN', 'REDEEM', 'ADJUST', 'REVERSE');
 export type PointKind = (typeof POINT_KINDS)[number];
 
+export const PROMOTION_KINDS = values('TIME', 'COMBO');
+export type PromotionKind = (typeof PROMOTION_KINDS)[number];
+
 export const EINVOICE_KINDS = values('ORIGINAL', 'ADJUSTMENT');
 export type EInvoiceKind = (typeof EINVOICE_KINDS)[number];
 

@@ -8,7 +8,7 @@ SELECT
   COALESCE(SUM(o.guest_count) FILTER (WHERE o.status = 'PAID'), 0)::int AS guests,
   COALESCE(SUM(o.net_revenue) FILTER (WHERE o.status = 'PAID'), 0) AS net_revenue,
   COALESCE(SUM(o.cost_total) FILTER (WHERE o.status = 'PAID'), 0) AS cost_total,
-  COALESCE(SUM(o.item_discount_total + o.order_discount_amount + o.points_discount) FILTER (WHERE o.status = 'PAID'), 0) AS discounts,
+  COALESCE(SUM(o.item_discount_total + o.promo_discount_total + o.order_discount_amount + o.points_discount) FILTER (WHERE o.status = 'PAID'), 0) AS discounts,
   COALESCE(SUM(o.vat_amount) FILTER (WHERE o.status = 'PAID'), 0) AS vat,
   COALESCE(SUM(o.app_commission) FILTER (WHERE o.status = 'PAID'), 0) AS app_commission,
   COUNT(*) FILTER (WHERE o.status = 'CANCELLED' AND o.cancel_kind = 'CANCELLED')::int AS cancelled,

@@ -156,7 +156,11 @@ export function OrderListPage({ inPos = false }: { inPos?: boolean }) {
                 secondary: true,
                 cell: (r) => (
                   <span className="num">
-                    {money(Number(r.itemDiscountTotal) + Number(r.orderDiscountAmount))}
+                    {money(
+                      Number(r.itemDiscountTotal) +
+                        Number(r.promoDiscountTotal) +
+                        Number(r.orderDiscountAmount),
+                    )}
                   </span>
                 ),
               },
@@ -334,6 +338,12 @@ function OrderBody({ o }: { o: OrderDto }) {
                 <span className="text-xs text-muted"> · {optionsLabel(i.options)}</span>
               )}
               {i.note && <span className="text-xs text-muted"> · {i.note}</span>}
+              {Number(i.promoDiscount) > 0 && (
+                <span className="text-xs text-good">
+                  {' '}
+                  · {i.promotionName} −{money(i.promoDiscount)}
+                </span>
+              )}
               {i.status === 'CANCELLED' && (
                 <span className="block text-xs no-underline">
                   Huỷ: {i.cancelReason}
@@ -341,17 +351,23 @@ function OrderBody({ o }: { o: OrderDto }) {
                 </span>
               )}
             </span>
-            <span>{money(Number(i.amount) - Number(i.discountAmount))}</span>
+            <span>{money(Number(i.amount) - Number(i.discountAmount) - Number(i.promoDiscount))}</span>
           </div>
         ))}
       </div>
       <div className="num ml-auto flex w-full max-w-xs flex-col gap-1 text-[13px]">
         <Line label="Tổng tiền hàng" v={o.subtotal} />
+        {Number(o.promoDiscountTotal) > 0 && (
+          <Line label="Khuyến mãi" v={String(-Number(o.promoDiscountTotal))} />
+        )}
         {Number(o.itemDiscountTotal) + Number(o.orderDiscountAmount) > 0 && (
           <Line
             label={`Giảm giá${o.discountReason ? ` (${o.discountReason})` : ''}`}
             v={String(-(Number(o.itemDiscountTotal) + Number(o.orderDiscountAmount)))}
           />
+        )}
+        {Number(o.pointsDiscount) > 0 && (
+          <Line label={`Đổi ${o.pointsRedeemed} điểm`} v={String(-Number(o.pointsDiscount))} />
         )}
         {Number(o.serviceChargeAmount) > 0 && <Line label="Phụ thu" v={o.serviceChargeAmount} />}
         {Number(o.vatAmount) > 0 && <Line label={`VAT ${Number(o.vatPct)}%`} v={o.vatAmount} />}

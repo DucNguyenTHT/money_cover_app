@@ -33,6 +33,7 @@ import { bankRouter } from './modules/bank/bank.router';
 import { einvoiceRouter } from './modules/einvoice/einvoice.router';
 import { productionRouter } from './modules/production/production.router';
 import { customersRouter } from './modules/customers/customers.router';
+import { promotionsRouter } from './modules/promotions/promotions.router';
 import { architecturePage } from './modules/architecture/architecture.page';
 
 export function createApp() {
@@ -102,6 +103,7 @@ export function createApp() {
     einvoice: einvoiceRouter,
     production: productionRouter,
     customers: customersRouter,
+    promotions: promotionsRouter,
   });
   createExpressEndpoints(api, router, app, {
     globalMiddleware: [authMiddleware],

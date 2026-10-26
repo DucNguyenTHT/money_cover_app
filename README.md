@@ -1,6 +1,6 @@
 # Quán ăn — Bán hàng (POS) & Kế toán nội bộ
 
-Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR tự xác nhận tiền về qua SePay / Casso, hoá đơn điện tử từ máy tính tiền, đơn app giao hàng, khách quen tích / đổi điểm), kho FIFO theo lô (nhập, xuất, nợ kho, bán thành phẩm như nước dùng nấu theo mẻ,
+Bán hàng tại quầy (bàn, bếp / bar, thanh toán + VietQR tự xác nhận tiền về qua SePay / Casso, hoá đơn điện tử từ máy tính tiền, đơn app giao hàng, khách quen tích / đổi điểm, giờ vàng & combo tự áp), kho FIFO theo lô (nhập, xuất, nợ kho, bán thành phẩm như nước dùng nấu theo mẻ,
 kiểm kê, tồn tối thiểu & gợi ý nhập hàng), nhà cung cấp & công nợ, sổ quỹ tiền mặt, nhân viên (ca làm, chấm công,
 bảng lương, tạm ứng), giá thành & giá bán từng món (giá tại quán, giá riêng từng app, lịch sử giá, lãi của size /
 topping), lãi lỗ tháng / quý / năm, khoá sổ, lưu trữ chứng từ (ảnh / PDF / XML hoá đơn, tải file nén hoặc gửi lên
