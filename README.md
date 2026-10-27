@@ -8,6 +8,29 @@ Google Drive), thuế hộ kinh doanh (GTGT + TNCN tạm tính, so sánh 2 cách
 liệu tự động mỗi đêm (kèm bản trên Telegram / Google Drive; ảnh chứng từ lấy lại được từ Telegram) và báo cáo chốt ngày,
 tin nhắc việc buổi sáng, cảnh báo gian lận gửi chủ quán qua Telegram.
 
+## Hình ảnh
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/pos-ban.png" alt="Sơ đồ bàn và đơn của bàn"><br><sub><b>Sơ đồ bàn</b> — bàn đang dùng, giờ khách đặt, yêu cầu gọi món từ QR; đơn của bàn có combo và khách quen</sub></td>
+    <td width="50%"><img src="docs/images/pos-goi-mon.png" alt="Gọi món"><br><sub><b>Gọi món</b> — thực đơn theo nhóm, giá theo kênh bán, gửi bếp / bar</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/thanh-toan.png" alt="Thanh toán"><br><sub><b>Thanh toán</b> — nhiều hình thức, khuyến mãi tự áp, đổi điểm khách quen</sub></td>
+    <td><img src="docs/images/bep.png" alt="Màn hình bếp"><br><sub><b>Màn hình bếp / bar</b> — món chờ theo trạm, cập nhật tức thì</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/dat-ban.png" alt="Đặt bàn"><br><sub><b>Đặt bàn</b> — giờ đến, bàn, tiền cọc; khách đến mở đơn đúng bàn</sub></td>
+    <td><img src="docs/images/bang-tinh-gia.png" alt="Bảng tính giá món"><br><sub><b>Bảng tính giá</b> — giá vốn theo định mức × giá nhập, lãi từng kênh và từng app, giá gợi ý</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/bao-cao-ban-hang.png" alt="Phân tích bán hàng"><br><sub><b>Báo cáo bán hàng</b> — theo giờ, kênh, bàn, nhân viên, hình thức thanh toán, món bán chạy</sub></td>
+    <td align="center"><img src="docs/images/khach-qr.png" alt="Khách gọi món bằng QR" width="220"><br><sub><b>Khách quét QR tại bàn</b> — xem thực đơn, gọi món, gọi nhân viên trên điện thoại</sub></td>
+  </tr>
+</table>
+
+<sub>Ảnh chụp từ dữ liệu demo (<code>db:seed:demo</code> + <code>db:seed:demo-sales</code>), tên quán là tên giả.</sub>
+
 | App        | Nội dung                                                                                                                                                  |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/api` | Express + Socket.IO + Prisma (PostgreSQL). `src/domain` nghiệp vụ thuần, `src/contracts` hợp đồng API (ts-rest), `prisma/sql` truy vấn báo cáo (TypedSQL) |
