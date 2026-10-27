@@ -96,7 +96,6 @@ tử đều đã trừ. Giới hạn giảm giá của nhân viên chỉ xét gi
 - Mỗi truy vấn báo cáo là một file `apps/api/prisma/sql/*.sql`; `prisma generate --sql` sinh hàm có kiểu (`@prisma/client/sql`).
 - **Sinh code cần kết nối DB** (Prisma đọc kiểu cột từ database):
   - máy dev: `pnpm db:generate` khi DB chạy và **API dev server đã dừng** (Windows khoá file engine);
-  - CI: migrate DB service rồi `pnpm db:generate`;
   - production: `docker-entrypoint.sh` chạy `migrate deploy` → `generate --sql` trước khi khởi động.
 - Lãi lỗ tháng: `domain/period/pnl.ts` dựng dòng báo cáo từ số liệu thô; tháng đã khoá đọc snapshot `monthly_closings`.
 

@@ -69,7 +69,7 @@ Mở http://localhost:5173, đăng nhập `admin` bằng mật khẩu tạm in r
 | `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:reset` | quản lý DB                                                                                                                                             |
 | `pnpm --filter @ketoan/api db:reset-admin`                                | quên mật khẩu `admin`: in mật khẩu tạm mới (phải đổi khi đăng nhập)                                                                                    |
 
-Commit chạy `lint-staged` (eslint + prettier) qua husky. CI (`.github/workflows/ci.yml`) chạy lint, typecheck, test, build và e2e.
+Commit chạy `lint-staged` (eslint + prettier) qua husky. Không có CI: trước khi đưa lên máy chủ, chạy `pnpm lint`, `pnpm typecheck`, `pnpm test` (và `pnpm e2e` khi đổi luồng bán hàng / kho) trên máy dev.
 
 ## Chạy tại quán (production)
 

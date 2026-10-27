@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Default (`pnpm e2e`): starts its OWN stack — API on :4100 and web on :5273 over a throwaway database
  * `ketoan_e2e` that is reset at every run — so the tests never write into the dev data.
  *
- * Against an app that is already running (CI, the production stack): set
+ * Against an app that is already running (e.g. the production stack): set
  *   BASE_URL            — e.g. http://localhost:5173
  *   E2E_USER / E2E_PASS — an ADMIN account with PIN 2580 and the password already changed
  *   ONBOARD_PASS        — only on a fresh install: the temporary `admin` password, to run the onboarding test
