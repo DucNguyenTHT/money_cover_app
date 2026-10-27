@@ -293,7 +293,7 @@ function apiSection() {
     <tr><td><span class="m get">GET</span></td><td class="col">/api/document-export?period&amp;t</td><td class="muted">file .zip chứng từ, link ký 2 phút</td><td><span class="role admin">ADMIN</span></td></tr>
     <tr><td><span class="m post">POST</span></td><td class="col">/api/reports/export.xlsx</td><td class="muted">xuất Excel báo cáo</td><td><span class="role admin">ADMIN</span></td></tr>
     <tr><td><span class="m get">GET</span></td><td class="col">/api/imports/templates/:kind</td><td class="muted">file Excel mẫu</td><td><span class="role admin">ADMIN</span></td></tr>
-    <tr><td><span class="m get">WS</span></td><td class="col">/socket.io</td><td class="muted">order:update, table:update, kitchen:new, printer:error…</td><td><span class="role any">đã đăng nhập</span></td></tr>
+    <tr><td><span class="m get">WS</span></td><td class="col">/socket.io</td><td class="muted">order:update, table:update, kitchen:new, kitchen:update, dish:availability, bank:txn, table:request, printer:error</td><td><span class="role any">đã đăng nhập</span></td></tr>
     <tr><td><span class="m get">GET</span></td><td class="col">/api/health</td><td class="muted">kiểm tra sống</td><td><span class="role pub">công khai</span></td></tr>
   </table></details></div>`;
 }
@@ -315,31 +315,35 @@ function architectureSection() {
   return `
   <div class="arch">
     <div class="tier">
-      <div class="tier-label">Thiết bị trong quán (LAN, trình duyệt / PWA)</div>
+      <div class="tier-label">Thiết bị trong quán (LAN)</div>
       <div class="row">
-        ${box('Máy tính bảng thu ngân', '/pos — sơ đồ bàn, gọi món, thanh toán')}
+        ${box('Máy tính bảng thu ngân', '/pos — sơ đồ bàn, gọi món, thanh toán, đặt bàn, yêu cầu từ QR, sổ quỹ, chốt ngày')}
         ${box('Màn hình bếp / bar', '/kitchen — phiếu theo trạm, realtime')}
-        ${box('Máy quản lý', '/admin — thực đơn, kho, chứng từ, báo cáo')}
-        ${box('Điện thoại', 'chụp hoá đơn, xem báo cáo')}
+        ${box('Máy quản lý', '/admin — thực đơn, khuyến mãi, kho, khách hàng, kế toán, nhân viên, báo cáo, cài đặt')}
+        ${box('Điện thoại chủ / nhân viên', 'chụp hoá đơn, xem báo cáo (cùng app, HTTPS)')}
+        ${box('Điện thoại khách', 'quét QR trên bàn → trang gọi món riêng (guest.html), không đăng nhập', 'guest')}
       </div>
     </div>
-    <div class="arrow">HTTPS · WebSocket</div>
+    <div class="arrow">HTTPS · WebSocket (nhân viên) — HTTP :8081 (khách, chỉ trang gọi món)</div>
     <div class="tier">
       <div class="tier-label">Máy chủ tại quán — Docker Compose</div>
       <div class="row">
-        ${box('Caddy (container web)', 'HTTPS bằng CA nội bộ · / → bản build React · /api, /socket.io → api', 'edge')}
+        ${box('Caddy (container web) · :443', 'HTTPS bằng CA nội bộ · / → bản build React · /api, /socket.io → api · /t/* → trang khách', 'edge')}
+        ${box('Caddy · :8081 (HTTP)', 'cho điện thoại khách (không tin CA của quán): /t/* → guest.html · /api/public/* → api · còn lại 404', 'edge')}
+        ${box('Caddy · :8080 (HTTP)', 'tải chứng chỉ CA cho máy tính bảng (/ca.crt)', 'edge')}
       </div>
-      <div class="arrow small">reverse proxy</div>
+      <div class="arrow small">reverse proxy (api không mở cổng ra ngoài)</div>
       <div class="row">
         <div class="box big">
           <b>api — Node + Express 4 + ts-rest + Socket.IO</b>
           <div class="layers">
             <div class="layer l1"><b>modules/*</b><span>router (ts-rest) + service: ${Object.keys(api).map(esc).join(' · ')}</span></div>
             <div class="layer-row">
-              <div class="layer l2"><b>contracts</b><span>API dùng chung web ↔ api (zod)</span></div>
-              <div class="layer l3"><b>domain</b><span>nghiệp vụ thuần: FIFO, giá (theo kênh / app), đơn, kiểm kê, lãi lỗ, thuế, quyền chứng từ, lịch sao lưu</span></div>
-              <div class="layer l4"><b>core</b><span>db (Prisma), auth JWT, audit, khoá sổ, realtime, in ESC/POS, storage, mã hoá · lịch sao lưu (modules/backup) · hàng đợi tin Telegram (modules/notify)</span></div>
+              <div class="layer l2"><b>contracts</b><span>API dùng chung web ↔ api (zod) · sự kiện Socket.IO</span></div>
+              <div class="layer l3"><b>domain</b><span>nghiệp vụ thuần: FIFO, giá (theo kênh / app), tổng tiền đơn, khuyến mãi, điểm khách quen, đặt bàn, yêu cầu QR, chế biến, kiểm kê, lãi lỗ, thuế, chứng từ hoá đơn điện tử, khớp tiền chuyển khoản, nội dung tin Telegram</span></div>
+              <div class="layer l4"><b>core</b><span>db (Prisma, inTx), auth JWT + route công khai, audit, khoá sổ, realtime, in ESC/POS, storage, secret-box (mã hoá), redact giá vốn</span></div>
             </div>
+            <div class="layer l5"><b>Tiến trình nền (trong api, bật ở main.ts, tắt khi chạy test)</b><span>sao lưu (backup_hour, lỗi thử lại mỗi giờ) · hàng đợi tin Telegram (mỗi phút + ngay khi có tin, tin sáng theo giờ cài) · đọc tiền chuyển khoản (60 giây; 4 giây SePay / 30 giây Casso khi POS chờ tiền) · hoá đơn điện tử (30 giây; thử lại sau 1 / 5 / 15 / 60 phút, bỏ sau 3 ngày)</span></div>
           </div>
         </div>
       </div>
@@ -351,12 +355,12 @@ function architectureSection() {
         ${box('Máy in nhiệt LAN', 'ESC/POS cổng 9100 · bill, bếp, bar', 'device')}
       </div>
     </div>
-    <div class="arrow">Internet (tuỳ chọn)</div>
+    <div class="arrow">Internet (tuỳ chọn — mất mạng vẫn bán được, việc gửi đi chờ hàng đợi)</div>
     <div class="row">
-      ${box('Google Drive của chủ quán', 'bản sao lưu hằng đêm (tự động) · .zip chứng từ (bấm tay) · OAuth mã thiết bị, Client ID nhập trong Cài đặt · quyền drive.file', 'cloud')}
-      ${box('Telegram của chủ quán', 'bot gửi file sao lưu hằng đêm + từng file chứng từ mới (≤ 50 MB / file) · báo cáo chốt ngày, tin buổi sáng, cảnh báo (có thể vào nhóm khác)', 'cloud')}
-      ${box('Nhà cung cấp hoá đơn điện tử', 'chọn trong Cài đặt: Giả lập hoặc SePay eInvoice · gửi lại khi mất mạng · Client Secret mã hoá', 'cloud')}
-      ${box('SePay / Casso', 'dịch vụ báo biến động số dư: api đọc tiền vào tài khoản mỗi phút (vài giây khi POS chờ tiền) · mã API mã hoá', 'cloud')}
+      ${box('Telegram của chủ quán', 'bot: file sao lưu, file chứng từ mới · báo cáo chốt ngày, tin buổi sáng, cảnh báo tức thì (có thể vào nhóm khác)', 'cloud')}
+      ${box('SePay / Casso', 'báo biến động số dư: api hỏi định kỳ tiền vào tài khoản (không webhook, không mở cổng) · mã API mã hoá', 'cloud')}
+      ${box('Nhà cung cấp hoá đơn điện tử', 'chọn trong Cài đặt: Giả lập hoặc SePay eInvoice · hàng đợi, gửi lại khi mất mạng · Client Secret mã hoá', 'cloud')}
+      ${box('Google Drive của chủ quán', 'bản sao lưu hằng đêm · .zip chứng từ (bấm tay) · OAuth mã thiết bị, quyền drive.file', 'cloud')}
       ${box('Ổ cứng ngoài / OneDrive', 'scripts/backup-db.ps1 lúc 03:00 chép backups/ + ảnh chứng từ → BACKUP_COPY_DIR', 'cloud')}
     </div>
   </div>
@@ -366,9 +370,9 @@ function architectureSection() {
       <h3>Mã nguồn (monorepo pnpm + Turborepo)</h3>
       <ul class="tree">
         <li><b>apps/api</b> — <code>src/domain</code> · <code>src/contracts</code> · <code>src/core</code> · <code>src/modules/*</code> · <code>prisma/</code> (schema, migrations, sql, seed)</li>
-        <li><b>apps/web</b> — React + Vite + Tailwind v4: <code>src/features/*</code> theo màn · <code>src/pos</code> · <code>src/components</code> (UI tự viết) · <code>src/lib</code></li>
+        <li><b>apps/web</b> — React + Vite + Tailwind v4, 2 trang: <code>index.html</code> (app nhân viên: <code>src/features/*</code> · <code>src/pos</code> · <code>src/components</code> · <code>src/lib</code>) và <code>guest.html</code> (<code>src/guest</code>, trang khách nhẹ, fetch thẳng /api/public)</li>
         <li><b>e2e</b> — Playwright: bán hàng, kiểm kê, chứng từ, a11y, cài mới</li>
-        <li><b>docker/</b>, <b>scripts/</b> — Dockerfile, Caddyfile, sao lưu / khôi phục / đặt lại admin</li>
+        <li><b>docker/</b>, <b>scripts/</b> — Dockerfile, Caddyfile (:443, :8080, :8081), sao lưu / khôi phục / đặt lại admin</li>
       </ul>
     </div>
     <div>
@@ -384,6 +388,22 @@ function architectureSection() {
       </div>
       <p class="muted">domain không import Prisma / Express / Node; web chỉ dùng 2 cổng contracts và domain.</p>
     </div>
+    <div>
+      <h3>Nối giữa các module</h3>
+      <ul class="tree">
+        <li><b>Đơn hàng gọi hook trong cùng transaction</b>: thanh toán → <code>customers</code> (trừ / tích điểm), <code>reservations</code> (trừ cọc), <code>einvoice</code> (xếp hàng hoá đơn); huỷ → hoàn điểm, cọc quay lại giữ, hoá đơn điều chỉnh. Mỗi lần đơn đổi → <code>promotions.rules</code> tính lại khuyến mãi.</li>
+        <li><b>Tránh vòng import</b>: module cần sửa đơn gọi hàm của <code>orders</code> từ router / service của mình (lưu khuyến mãi → <code>refreshOpenOrders</code>, nhận yêu cầu QR → <code>addItems</code> / <code>open</code>); tin Telegram gọi thẳng <code>dailyLines</code> / <code>morningLines</code> của từng module.</li>
+        <li><b>Tiền ra vào két</b> từ màn khác (nhà cung cấp, lương, tạm ứng, tiền cọc) đi qua <code>cash.addTx</code> / <code>cancelBySourceTx</code> với <code>source</code> riêng — chỉ huỷ ở màn gốc.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Route công khai (không đăng nhập)</h3>
+      <ul class="tree">
+        <li><code>/api/public/*</code> — trang gọi món QR: mã bàn ngẫu nhiên, tắt được trong Cài đặt; 8 lần gửi + 120 lần đọc / phút / máy; body ≤ 20 KB; không có giá vốn; yêu cầu chỉ vào đơn khi nhân viên nhận.</li>
+        <li><code>/api/auth/login</code> (10 lần / phút / máy), <code>/api/health</code>, <code>/api/docs</code>.</li>
+        <li>Giới hạn tính theo IP thiết bị: api tin 1 lớp proxy (Caddy) — api không mở cổng trực tiếp.</li>
+      </ul>
+    </div>
   </div>`;
 }
 
@@ -392,12 +412,12 @@ function flowsSection() {
     flow('Một yêu cầu API', 'Mọi thao tác ghi đều đi qua đường này.', [
       ['Web', 'client sinh từ contract, kiểu khớp đầu-cuối', 'client.orders.pay()'],
       ['ts-rest + zod', 'kiểm dữ liệu vào; sai → 400 VALIDATION'],
-      ['authMiddleware', 'JWT → user; kiểm metadata.roles của route'],
+      ['authMiddleware', 'JWT → user; kiểm metadata.roles (route public: bỏ qua, đã qua giới hạn tần suất)'],
       ['Service', 'inTx: đọc DB → gọi domain → ghi + writeAudit cùng transaction', 'audit_logs'],
-      ['Sau commit', 'phát Socket.IO, máy khác refetch', 'order:update · kitchen:new'],
+      ['Sau commit', 'phát Socket.IO, máy khác refetch', 'order:update · table:request · bank:txn'],
       ['Trả về', 'redactFor(role) bỏ giá vốn / lãi với STAFF, KITCHEN'],
     ]),
-    flow('Bán hàng', 'Doanh thu chỉ đến từ đơn POS.', [
+    flow('Bán hàng', 'Doanh thu chỉ đến từ đơn POS (gọi món QR cũng vào đơn qua máy bán hàng).', [
       ['Chọn bàn / mang về / app', 'mở đơn, mã đơn theo ngày kinh doanh', 'orders (OPEN) · order_counters'],
       [
         'Gọi món',
@@ -407,50 +427,94 @@ function flowsSection() {
       [
         'Tuỳ chọn món',
         'size / topping / yêu cầu: + tiền vào giá dòng, size nhân định mức, topping cộng nguyên liệu; lưu bản chụp',
-        'option_groups · options · order_item_options · order_item_extras',
+        'order_items.base_price · order_item_options · order_item_extras',
+      ],
+      [
+        'Tính lại tổng',
+        'mỗi lần đơn đổi: khuyến mãi (combo, rồi giờ vàng) → giảm giá món → giảm giá đơn → đổi điểm → phụ thu → VAT',
+        'order_items.promo_discount · orders.promo_discount_total · points_discount',
       ],
       ['Gửi bếp', 'in phiếu ESC/POS theo trạm, màn bếp nhận realtime', 'kitchen_status · printers'],
       [
-        'Gọi món QR',
-        'khách quét mã trên bàn (trang riêng, cổng 8081, không đăng nhập) gửi yêu cầu; máy bán hàng nhận → món vào đơn của bàn',
-        'table_requests · tables.qr_token',
-      ],
-      [
-        'Đặt bàn',
-        'khách đặt trước (bàn, giờ, cọc); khách đến mở đơn từ đặt bàn; cọc tiền mặt vào sổ quỹ, trừ lại khi thanh toán',
-        'reservations · cash_entries (RESERVATION*) · orders',
-      ],
-      [
-        'Khuyến mãi',
-        'giờ vàng (% theo ngày / thứ / giờ gọi món) và combo (bộ món một giá) tự áp mỗi lần đơn đổi; dòng giảm tay thì không',
-        'promotions · promotion_items · order_items.promo_discount',
-      ],
-      [
-        'Khách quen',
-        'gắn khách theo số điện thoại; đổi điểm = giảm tiền (trừ lúc thanh toán); tích điểm theo doanh thu thuần; huỷ đơn hoàn điểm',
-        'customers · point_entries · orders.customer_id',
-      ],
-      ['Thanh toán', 'nhiều phương thức, VietQR, giảm giá cần PIN khi vượt mức', 'order_payments'],
-      [
-        'Tiền chuyển khoản về',
-        'SePay / Casso: đọc tiền vào tài khoản, khớp mã đơn trong nội dung (hoặc đúng số tiền POS đang chờ); POS báo đã nhận',
-        'bank_transactions · settings.bank_feed (mã hoá)',
-      ],
-      [
-        'Hoá đơn điện tử',
-        'xếp hàng cùng lúc thanh toán; worker gửi nhà cung cấp (Giả lập / SePay eInvoice), theo dõi tới khi phát hành; bill in số + QR tra cứu; huỷ đơn → điều chỉnh giảm',
-        'einvoices · settings.einvoice (mã hoá)',
+        'Thanh toán',
+        'nhiều phương thức, VietQR; giảm giá vượt mức cần PIN; trừ / tích điểm, trừ cọc đặt bàn',
+        'order_payments · point_entries · cash_entries',
       ],
       [
         'Trừ kho FIFO',
         'theo định mức món; thiếu hàng → nợ kho, không chặn bán',
         'issues SALE_USE · issue_allocations · lots',
       ],
-      ['Huỷ đơn / món', 'huỷ không xoá; món đã chế biến ghi hao', 'orders CANCELLED · audit_logs'],
+      [
+        'Huỷ đơn / món',
+        'huỷ không xoá; món đã chế biến ghi hao; đơn đã trả: hoàn lô, hoàn điểm, cọc quay lại giữ, hoá đơn điều chỉnh',
+        'orders CANCELLED · audit_logs',
+      ],
       [
         'Chốt ngày',
-        'tiền mặt dự kiến = tiền mặt bán + thu − chi sổ quỹ; ngày còn đơn mở không chốt được; sổ quỹ đổi sau khi chốt → cần chốt lại',
+        'tiền mặt dự kiến = tiền mặt bán + thu − chi sổ quỹ; đối chiếu chuyển khoản; ngày còn đơn mở không chốt được',
         'day_closings · cash_entries',
+      ],
+    ]),
+    flow(
+      'Tiền chuyển khoản & hoá đơn điện tử',
+      'Sau thanh toán; không đổi doanh thu, chỉ đối chiếu / phát hành.',
+      [
+        [
+          'Đọc tiền về',
+          'SePay / Casso: mới nhất trước, dừng ở giao dịch đã có; chỉ tài khoản VietQR',
+          'bank_transactions · settings.bank_feed (mã hoá)',
+        ],
+        [
+          'Khớp',
+          'mã đơn trong nội dung (chỉ so chữ + số) → đúng số tiền một máy POS đang chờ → gán tay',
+          'bank_transactions.order_id · match_kind',
+        ],
+        ['POS báo', 'màn thanh toán "Đã nhận …" · toast các máy', 'bank:txn'],
+        [
+          'Xếp hàng hoá đơn',
+          'cùng transaction với thanh toán (mọi đơn hoặc khi khách lấy); dựng chứng từ ở domain',
+          'einvoices (PENDING) · domain/einvoice/document.ts',
+        ],
+        [
+          'Gửi nhà cung cấp',
+          'worker: tạo → kiểm tra tới khi phát hành; mất mạng thử lại; bị từ chối → cảnh báo, gửi lại mã mới',
+          'einvoices.tracking_code · next_attempt_at',
+        ],
+        ['In bill', 'chờ ≤ 6 giây để in số hoá đơn + QR tra cứu', 'einvoices.invoice_no · lookup_url'],
+      ],
+    ),
+    flow('Khách tại bàn: đặt bàn, gọi món QR, khách quen', 'Từ lúc khách đặt tới khi thanh toán.', [
+      [
+        'Đặt bàn',
+        'giờ đến (ngày kinh doanh), bàn, giữ bàn bao lâu; một bàn không trùng giờ; sơ đồ bàn hiện "Đặt 19:00"',
+        'reservations',
+      ],
+      [
+        'Nhận cọc',
+        'tiền mặt → tự ghi thu sổ quỹ hôm nhận; chuyển khoản → không vào két',
+        'reservations.deposit · cash_entries (RESERVATION)',
+      ],
+      ['Khách đến', 'mở đơn tại bàn từ đặt bàn (số khách, ghi chú, khách quen)', 'reservations.order_id'],
+      [
+        'Gọi món QR',
+        'khách gửi từ trang guest (giá tại quán, tuỳ chọn) → máy POS kêu, bàn có nhãn đỏ → nhân viên nhận → món vào đơn, chưa gửi bếp',
+        'table_requests · tables.qr_token',
+      ],
+      [
+        'Khách quen',
+        'gắn theo số điện thoại; đổi điểm = giảm tiền, chỉ trừ lúc thanh toán',
+        'customers · orders.customer_id',
+      ],
+      [
+        'Thanh toán',
+        'cọc nằm trong dòng tiền mặt / chuyển khoản; cọc tiền mặt → tự ghi chi "Trừ tiền cọc" (két hai ngày đều khớp); tích điểm theo doanh thu thuần',
+        'cash_entries (RESERVATION_USE) · point_entries',
+      ],
+      [
+        'Huỷ / không đến',
+        'hoàn cọc (tiền mặt → ghi chi hôm nay) hoặc giữ cọc',
+        'reservations.deposit_outcome · cash_entries (RESERVATION_REFUND)',
       ],
     ]),
     flow('Sổ quỹ tiền mặt', 'Tiền vào / ra két ngoài bán hàng, để chốt ngày két khớp.', [
@@ -461,12 +525,12 @@ function flowsSection() {
       ],
       [
         'Tự ghi từ màn khác',
-        'trả nhà cung cấp, trả lương, tạm ứng bằng tiền mặt → modules/cash addTx trong cùng transaction',
+        'trả nhà cung cấp, trả lương, tạm ứng, tiền cọc đặt bàn (nhận / trừ / hoàn) → cash.addTx trong cùng transaction',
         'cash_entries.source · source_id',
       ],
       [
         'Huỷ',
-        'có lý do, không xoá; người ghi trong ngày hoặc ADMIN; khoản tự ghi chỉ huỷ ở màn gốc',
+        'có lý do, không xoá; người ghi trong ngày hoặc ADMIN; khoản tự ghi chỉ huỷ / sửa ở màn gốc',
         'cancelled_at',
       ],
     ]),
@@ -500,11 +564,11 @@ function flowsSection() {
         'stocktake_allocations · stocktake_dish_allocations',
       ],
     ]),
-    flow('Giá món', 'Gợi ý giá theo % nguyên liệu mục tiêu.', [
+    flow('Thực đơn, giá & khuyến mãi', 'Gợi ý giá theo % nguyên liệu mục tiêu; khuyến mãi tự áp vào đơn.', [
       ['Định mức', 'nguyên liệu + bao bì cho mỗi món, có ngày hiệu lực', 'dish_recipes · dish_recipe_items'],
       [
         'Bảng tính giá',
-        'giá vốn = định mức × giá nhập gần nhất; mỗi app một cột lãi theo phí sàn riêng; % chi phí chung chỉ tính tháng bán trọn vẹn',
+        'giá vốn = định mức × giá nhập gần nhất (bán thành phẩm: theo công thức mẻ); mỗi app một cột lãi theo phí sàn riêng',
         'overhead_expenses · delivery_apps',
       ],
       [
@@ -520,6 +584,11 @@ function flowsSection() {
         'Tuỳ chọn',
         'nhóm dùng chung (chọn 1 / chọn nhiều, bắt buộc, tối đa), gắn cho món theo thứ tự',
         'option_groups · options · option_ingredients · dish_option_groups',
+      ],
+      [
+        'Khuyến mãi',
+        'giờ vàng (% theo ngày / thứ / giờ gọi món, kênh) và combo (bộ món một giá, hiện giá vốn & lãi của bộ); lưu → đơn mở tính lại; không tính vào giới hạn giảm giá nhân viên',
+        'promotions · promotion_items',
       ],
     ]),
     flow('Nhân viên & lương', 'Chấm công → bảng lương tháng → chi phí chung.', [
@@ -539,7 +608,11 @@ function flowsSection() {
     ]),
     flow('Kỳ kế toán (tháng)', 'Lãi lỗ tổng hợp theo tháng; quý / năm = cộng các tháng.', [
       ['Chi phí chung', 'mặt bằng, lương (tự từ bảng lương), điện nước… theo tháng', 'overhead_expenses'],
-      ['Báo cáo lãi lỗ', 'TypedSQL lấy số thô → domain/period/pnl.ts dựng các dòng', 'prisma/sql/*.sql'],
+      [
+        'Báo cáo lãi lỗ',
+        'TypedSQL lấy số thô → domain/period/pnl.ts dựng các dòng; giảm giá gồm giảm tay + khuyến mãi + đổi điểm',
+        'prisma/sql/*.sql',
+      ],
       [
         'Thuế tạm tính',
         'hộ kinh doanh: GTGT + TNCN luỹ kế từ tháng 1 theo ngành của nhóm món (domain/tax/household.ts); báo cáo Thuế phải nộp',
@@ -594,12 +667,12 @@ function flowsSection() {
       ],
       [
         'Chốt ngày',
-        'doanh thu, lãi gộp tạm tính, tiền theo hình thức, tiền két lệch (⚠️ từ mức cài đặt)',
+        'doanh thu, lãi gộp tạm tính, tiền theo hình thức, tiền két lệch (⚠️ từ mức cài đặt), chuyển khoản, hoá đơn điện tử',
         'notify_daily',
       ],
       [
         'Buổi sáng',
-        'mỗi ngày 1 tin lúc notify_morning_hour: ngày chưa chốt, hàng sắp hết, nợ kho, giá, sao lưu, thuế',
+        'mỗi ngày 1 tin lúc notify_morning_hour: ngày chưa chốt, hàng sắp hết, nợ kho, giá, sao lưu, thuế, đặt bàn hôm nay, tiền chuyển khoản chưa khớp, hoá đơn lỗi',
       ],
       [
         'Cảnh báo ngay',
@@ -633,11 +706,11 @@ h2{margin:0 0 4px;font-size:18px}h3{font-size:14px;margin:18px 0 8px}small,.mute
 .row{display:flex;flex-wrap:wrap;gap:10px}.row>.box{flex:1 1 200px}
 .box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);display:flex;flex-direction:column;gap:2px}
 .box b{font-size:13px}.box span{font-size:12px;color:var(--muted)}
-.box.edge{background:var(--soft)}.box.store{background:var(--green)}.box.device{background:var(--amber)}.box.cloud{background:var(--violet)}.box.big{flex:1 1 100%}
+.box.edge{background:var(--soft)}.box.store{background:var(--green)}.box.device{background:var(--amber)}.box.cloud{background:var(--violet)}.box.guest{background:var(--pink)}.box.big{flex:1 1 100%}
 .arrow{align-self:center;font-size:12px;color:var(--muted);padding:2px 0}.arrow:before{content:"▼ ";color:var(--primary)}.arrow.small{margin:2px 0}
 .layers{display:flex;flex-direction:column;gap:6px;margin-top:8px}.layer-row{display:flex;flex-wrap:wrap;gap:6px}.layer-row .layer{flex:1 1 180px}
 .layer{border-radius:8px;padding:8px 10px;display:flex;flex-direction:column}.layer span{font-size:12px;color:var(--muted)}
-.l1{background:var(--soft)}.l2{background:var(--amber)}.l3{background:var(--green)}.l4{background:var(--violet)}
+.l1{background:var(--soft)}.l2{background:var(--amber)}.l3{background:var(--green)}.l4{background:var(--violet)}.l5{background:var(--pink)}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .tree{margin:0;padding-left:18px}.tree li{margin:4px 0}
 .deps{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0}.dep{border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12px;font-weight:600}.deps i{color:var(--primary);font-style:normal}
@@ -669,7 +742,7 @@ export function architectureHtml(): string {
 <title>Kiến trúc hệ thống</title><style>${CSS}</style></head><body>
 <header class="top"><h1>Kế toán quán — kiến trúc hệ thống</h1><nav><a href="#arch">Tổng thể</a> · <a href="#flows">Luồng nghiệp vụ</a> · <a href="#db">Database</a> · <a href="#api">API</a> · <a href="/api/docs">Swagger</a></nav><small>Sinh lúc ${esc(now)}</small></header>
 <main>
-<section id="arch"><h2>Kiến trúc tổng thể</h2><p class="lead">Một máy chủ tại quán chạy toàn bộ hệ thống, vẫn bán được khi mất Internet.</p>${architectureSection()}</section>
+<section id="arch"><h2>Kiến trúc tổng thể</h2><p class="lead">Một máy chủ tại quán chạy toàn bộ hệ thống, vẫn bán được khi mất Internet; dịch vụ bên ngoài đều tuỳ chọn và đi qua hàng đợi.</p>${architectureSection()}</section>
 <section id="flows"><h2>Luồng nghiệp vụ</h2><p class="lead">Mỗi bước ghi kèm bảng dữ liệu liên quan.</p>${flowsSection()}</section>
 <section id="db"><h2>Sơ đồ database</h2>${databaseSection()}</section>
 <section id="api"><h2>API</h2>${apiSection()}</section>
